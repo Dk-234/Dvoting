@@ -61,10 +61,17 @@ for running frontend locally:
 cd frontend
 python -m http.server (port)
 ```
+for contract compilation:
+```shell
+cd decentralized-voting
+npx hardhat clean
+npx hardhat compile
+```
 
 for contract deployment:
 
 ```shell
 npx hardhat run scripts/deploy.js --network localhost
+npx hardhat node
 ```
 
