@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decentralized Voting System</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗳️ Decentralized Voting System</h1>
+            <p class="subtitle">Secure, transparent voting powered by blockchain technology</p>
+        </header>
+        
+        <div id="connectSection" class="connect-wallet">
+            <h2>Connect Your Wallet to Get Started</h2>
+            <button id="connectWallet" class="connect-btn">Connect MetaMask</button>
+            <p class="note">Make sure you're connected to the local Hardhat network (Chain ID: 1337)</p>
+        </div>
+        
+        <div id="appContent" class="hidden">
+            <div class="status-bar">
+                <div class="account-info">Account: <span id="accountAddress"></span></div>
+                <div id="votingStatus" class="voting-status inactive">Voting Inactive</div>
+                <div class="timer">Time remaining: <span id="timeRemaining">00:00:00</span></div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title" id="votingTitle">Voting Title</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-label">Total Votes:</span>
+                        <span class="stat-value" id="totalVotes">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Proposals:</span>
+                        <span class="stat-value" id="proposalsCount">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title">Proposals</h2>
+                <div id="proposalsList" class="proposals-grid"></div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title">Live Results</h2>
+                <div class="results-container">
+                    <div class="chart-section">
+                        <h3>Vote Distribution</h3>
+                        <div class="chart-container">
+                            <canvas id="resultsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="table-section">
+                        <h3>Detailed Results</h3>
+                        <div id="resultsTable" class="results-table"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="adminPanel" class="card admin-panel">
+                <h2 class="card-title">Admin Panel</h2>
+                <div class="admin-controls">
+                    <div class="form-group">
+                        <label for="proposalName">Proposal Name</label>
+                        <input type="text" id="proposalName" placeholder="Enter proposal name">
+                    </div>
+                    <div class="form-group">
+                        <label for="proposalDescription">Proposal Description</label>
+                        <textarea id="proposalDescription" placeholder="Enter proposal description"></textarea>
+                    </div>
+                    <button id="addProposal" class="admin-btn">Add Proposal</button>
+                    
+                    <div class="form-group">
+                        <label for="voterAddress">Authorize Voter</label>
+                        <input type="text" id="voterAddress" placeholder="0x...">
+                    </div>
+                    <button id="authorizeVoter" class="admin-btn">Authorize Voter</button>
+                    
+                    <div class="button-group">
+                        <button id="startVoting" class="admin-btn primary">Start Voting</button>
+                        <button id="endVoting" class="admin-btn danger">End Voting</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <!-- Load Ethers.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+    
+    <!-- Import the contract details -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
