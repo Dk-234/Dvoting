@@ -206,9 +206,16 @@ npm run deploy:sepolia
 cd decentralized-voting
 npm test
 ```
+for contract compilation:
+```shell
+cd decentralized-voting
+npx hardhat clean
+npx hardhat compile
+```
 
 ## Tech Stack
 
+<<<<<<< HEAD
 | Layer            | Technology                          |
 |------------------|-------------------------------------|
 | Smart Contract   | Solidity ^0.8.24, Hardhat           |
@@ -218,4 +225,10 @@ npm test
 | Backend          | Express.js, Multer                  |
 | Charts           | Chart.js                            |
 | Wallet           | MetaMask                            |
+=======
+```shell
+npx hardhat node
+npx hardhat run scripts/deploy.js --network localhost
+```
+>>>>>>> 857d5005955ead0da3c7667d36b4487ef518dff6
 
