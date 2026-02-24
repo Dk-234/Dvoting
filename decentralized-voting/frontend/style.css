@@ -1646,3 +1646,258 @@ button:disabled {
     color: #999;
     font-style: italic;
 }
+
+/* ═══════════════════════════════════════════
+   IDENTITY VERIFICATION & VOTER LIST STYLES
+   ═══════════════════════════════════════════ */
+
+.header-nav {
+    margin-top: 15px;
+}
+
+.nav-link {
+    display: inline-block;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.nav-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+}
+
+/* Identity status in status bar */
+.identity-status {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.identity-status.verified {
+    background: #d4edda;
+    color: #155724;
+}
+
+.identity-status.not-verified {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Identity status on proposal cards */
+.voter-status.identity-verified {
+    background: #d4edda;
+    color: #155724;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+}
+
+.voter-status.identity-not-verified {
+    background: #fff3cd;
+    color: #856404;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+}
+
+.voter-status.identity-not-verified a {
+    color: #764ba2;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+/* Verified Voters Section */
+.verified-voters-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 12px 0;
+    border: 1px solid #e0e0e0;
+}
+
+.verified-voters-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.verified-voters-header h4 {
+    color: var(--dark);
+    font-size: 1rem;
+}
+
+.small-btn {
+    padding: 6px 14px !important;
+    font-size: 0.8rem !important;
+    border-radius: 6px !important;
+}
+
+.verified-voters-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.no-voters-msg, .loading-msg {
+    text-align: center;
+    color: #888;
+    padding: 20px;
+    font-style: italic;
+}
+
+.voters-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.voters-table-header {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1.2fr 0.8fr 1fr 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #e9ecef;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: #495057;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.voters-table-row {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1.2fr 0.8fr 1fr 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    align-items: center;
+    font-size: 0.88rem;
+    transition: background 0.2s;
+}
+
+.voters-table-row:hover {
+    background: rgba(78, 84, 200, 0.05);
+}
+
+.voters-table-row:last-child {
+    border-bottom: none;
+}
+
+.vt-col {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vt-addr {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    color: #6c757d;
+}
+
+.voters-count {
+    text-align: right;
+    font-size: 0.8rem;
+    color: #888;
+    margin-top: 8px;
+    font-style: italic;
+}
+
+/* Authorization badges */
+.auth-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.auth-badge.authorized {
+    background: #d4edda;
+    color: #155724;
+}
+
+.auth-badge.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.auth-badge.voted {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.auth-badge.info {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+/* Authorize action buttons in voter list */
+.auth-action-btn {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-action-btn.authorize {
+    background: var(--success);
+    color: white;
+}
+
+.auth-action-btn.authorize:hover {
+    background: #218838;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.auth-action-btn.authorized {
+    background: #d4edda;
+    color: #155724;
+    cursor: default;
+}
+
+.auth-action-btn.voted {
+    background: #cce5ff;
+    color: #004085;
+    cursor: default;
+}
+
+.auth-hint {
+    font-size: 0.78rem;
+    color: #999;
+    font-style: italic;
+}
+
+.control-hint {
+    font-size: 0.88rem;
+    color: #666;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .voters-table-header,
+    .voters-table-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .vt-date, .vt-type {
+        display: none;
+    }
+}

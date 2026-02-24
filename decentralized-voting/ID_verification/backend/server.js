@@ -21,9 +21,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve frontend static files
-const frontendDir = path.join(__dirname, '..', 'frontend');
-app.use(express.static(frontendDir));
+// Serve ID verification frontend at /verify
+const idFrontendDir = path.join(__dirname, '..', 'frontend');
+app.use('/verify', express.static(idFrontendDir));
+
+// Serve voting frontend at / (root)
+const votingFrontendDir = path.join(__dirname, '..', '..', 'frontend');
+app.use(express.static(votingFrontendDir));
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -1657,16 +1661,25 @@ app.post('/api/prepare-blockchain', (req, res) => {
     });
 });
 
+// Fallback: serve voting index.html for unknown routes (SPA-like)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(votingFrontendDir, 'index.html'));
+});
+app.get('/verify', (req, res) => {
+    res.sendFile(path.join(idFrontendDir, 'index.html'));
+});
+
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`
-    🚀 Identity Verification System
-    ==============================
-    Server running on port: ${PORT}
-    Frontend:    http://localhost:${PORT}
-    Health check: http://localhost:${PORT}/api/health
-    Extract ID:  POST http://localhost:${PORT}/api/extract-ssn
-    Features:    OCR (multi-variant) + QR Reader + Cross-verification
+    🚀 Decentralized Voting + Identity Verification System
+    ======================================================
+    Server running on port:  ${PORT}
+    Voting Portal:           http://localhost:${PORT}
+    ID Verification:         http://localhost:${PORT}/verify
+    Health check:            http://localhost:${PORT}/api/health
+    Extract ID API:          POST http://localhost:${PORT}/api/extract-ssn
+    Features:                OCR (multi-variant) + QR Reader + Cross-verification
     `);
 });

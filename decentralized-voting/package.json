@@ -7,7 +7,10 @@
     "test": "hardhat test",
     "node": "hardhat node",
     "deploy": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "server": "node ID_verification/backend/server.js",
+    "start": "concurrently -n node,server -c blue,green \"npx hardhat node\" \"node ID_verification/backend/server.js\"",
+    "dev": "concurrently -n node,server -c blue,green \"npx hardhat node\" \"node ID_verification/backend/server.js\""
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
@@ -16,6 +19,7 @@
     "@typechain/ethers-v6": "^0.5.0",
     "@typechain/hardhat": "^9.0.0",
     "chai": "^4.3.10",
+    "concurrently": "^9.2.1",
     "ethers": "^6.16.0",
     "hardhat": "^2.19.0",
     "hardhat-gas-reporter": "^1.0.8",

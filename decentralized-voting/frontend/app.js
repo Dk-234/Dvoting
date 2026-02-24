@@ -7,6 +7,7 @@ let signer;
 let contract;
 let account;
 let isOwner = false;
+let isIdentityVerified = false;
 let chartInstance = null;
 let selectedProposalForResults = null; // Track selected proposal for results display
 let proposalTimers = {};      // proposalId -> client-side countdown seconds
@@ -73,6 +74,7 @@ async function init() {
     document.getElementById('endVoting').addEventListener('click', endVoting);
     document.getElementById('proposalResultsSelect').addEventListener('change', handleProposalResultsSelect);
     document.getElementById('adminToggle').addEventListener('click', toggleAdminPanel);
+    document.getElementById('refreshVerifiedVoters').addEventListener('click', loadVerifiedVoters);
     
     // Listen for account changes — auto-redirect on new connection
     window.ethereum.on('accountsChanged', handleAccountsChanged);
@@ -141,6 +143,23 @@ async function setupApplication(userAccount) {
         isOwner = (owner.toLowerCase() === account.toLowerCase());
     } catch (error) {
         console.error('Error checking owner:', error);
+    }
+    
+    // Check identity verification status
+    try {
+        isIdentityVerified = await contract.isVoterVerified(account);
+        const identityStatusEl = document.getElementById('identityStatus');
+        const identityStatusTextEl = document.getElementById('identityStatusText');
+        if (isIdentityVerified) {
+            identityStatusEl.className = 'identity-status verified';
+            const voterInfo = await contract.getVerifiedVoter(account);
+            identityStatusTextEl.textContent = `Verified (${voterInfo.name})`;
+        } else {
+            identityStatusEl.className = 'identity-status not-verified';
+            identityStatusTextEl.textContent = 'Not Verified';
+        }
+    } catch (error) {
+        console.error('Error checking identity:', error);
     }
     
     // Always show admin panel - users can manage their own proposals
@@ -360,12 +379,20 @@ async function displayProposals(proposals) {
         // Check if voter has already voted on THIS specific proposal
         const hasVotedOnThisProposal = voterInfo.votedProposalIds.has(index);
 
+        // Check identity verification status for this voter
+        let voterIdentityVerified = false;
+        try {
+            voterIdentityVerified = await contract.isVoterVerified(account);
+        } catch (error) {
+            console.error('Error checking identity verification:', error);
+        }
+
         // Per-proposal voting state from the contract struct
         const proposalVotingActive = Boolean(proposal.votingActive);
         const seededSeconds = proposalTimers[index] ?? 0;
 
         // Determine if voting buttons should be enabled
-        const canVoteNow = authorizedForThisProposal && !hasVotedOnThisProposal && proposalVotingActive && seededSeconds > 0;
+        const canVoteNow = voterIdentityVerified && authorizedForThisProposal && !hasVotedOnThisProposal && proposalVotingActive && seededSeconds > 0;
         
         // Create options HTML
         let optionsHTML = '';
@@ -412,6 +439,11 @@ async function displayProposals(proposals) {
                 ${proposal.description || 'No description provided.'}
             </div>
             ${timerHTML}
+            <div class="voter-status ${voterIdentityVerified ? 'identity-verified' : 'identity-not-verified'}">
+                ${voterIdentityVerified 
+                    ? '&#128274; Identity Verified' 
+                    : '&#128275; Identity Not Verified — <a href="../ID_verification/frontend/index.html">Verify Now</a>'}
+            </div>
             <div class="voter-status ${authorizedForThisProposal ? 'authorized' : 'not-authorized'}">
                 ${authorizedForThisProposal ? '&#10003; You can vote on this proposal' : '&#10007; Not authorized to vote on this proposal'}
                 ${hasVotedOnThisProposal ? ' | &#10003; Already voted on this proposal' : ''}
@@ -625,6 +657,8 @@ async function vote(proposalId, optionId) {
             showNotification('You have already voted', 'error');
         } else if (error.message.includes('Not authorized')) {
             showNotification('You are not authorized to vote', 'error');
+        } else if (error.message.includes('Must complete identity verification')) {
+            showNotification('You must verify your identity before voting. Go to the ID Verification portal.', 'error');
         } else if (error.message.includes('Invalid option')) {
             showNotification('Invalid voting option selected', 'error');
         } else {
@@ -755,6 +789,115 @@ async function addForAgainstOptions() {
     }
 }
 
+// ── Load and display verified voters from blockchain ──
+async function loadVerifiedVoters() {
+    if (!contract) {
+        showNotification('Contract not connected', 'error');
+        return;
+    }
+
+    const listEl = document.getElementById('verifiedVotersList');
+    const proposalId = document.getElementById('authProposalSelect').value.trim();
+    
+    listEl.innerHTML = '<p class="loading-msg">Loading verified voters from blockchain...</p>';
+
+    try {
+        const allVoters = await contract.getAllVerifiedVoters();
+        
+        if (allVoters.length === 0) {
+            listEl.innerHTML = '<p class="no-voters-msg">No verified voters found on the blockchain yet. Voters need to complete identity verification first.</p>';
+            return;
+        }
+
+        let html = '<div class="voters-table">';
+        html += '<div class="voters-table-header">';
+        html += '<span class="vt-col vt-name">Name</span>';
+        html += '<span class="vt-col vt-type">ID Type</span>';
+        html += '<span class="vt-col vt-addr">Wallet Address</span>';
+        html += '<span class="vt-col vt-date">Verified On</span>';
+        html += '<span class="vt-col vt-status">Status</span>';
+        html += '<span class="vt-col vt-action">Action</span>';
+        html += '</div>';
+
+        for (let i = 0; i < allVoters.length; i++) {
+            const voter = allVoters[i];
+            const addr = voter.walletAddress;
+            const shortAddr = addr.substring(0, 6) + '...' + addr.substring(addr.length - 4);
+            const verifiedDate = new Date(Number(voter.verifiedAt) * 1000).toLocaleDateString();
+
+            // Check authorization status for selected proposal
+            let authStatus = '';
+            let authBtnHtml = '';
+            if (proposalId !== '') {
+                const pid = parseInt(proposalId);
+                const isAuthorized = await contract.isAuthorizedForProposal(addr, pid);
+                const hasVoted = await contract.hasVotedOnProposal(addr, pid);
+                
+                if (hasVoted) {
+                    authStatus = '<span class="auth-badge voted">Voted</span>';
+                    authBtnHtml = '<button class="auth-action-btn voted" disabled>Already Voted</button>';
+                } else if (isAuthorized) {
+                    authStatus = '<span class="auth-badge authorized">Authorized</span>';
+                    authBtnHtml = '<button class="auth-action-btn authorized" disabled>✅ Authorized</button>';
+                } else {
+                    authStatus = '<span class="auth-badge pending">Not Authorized</span>';
+                    authBtnHtml = `<button class="auth-action-btn authorize" onclick="authorizeVoterFromList('${addr}', ${pid})">Authorize</button>`;
+                }
+            } else {
+                authStatus = '<span class="auth-badge info">Select proposal</span>';
+                authBtnHtml = '<span class="auth-hint">Select a proposal first</span>';
+            }
+
+            html += '<div class="voters-table-row">';
+            html += `<span class="vt-col vt-name">${voter.name}</span>`;
+            html += `<span class="vt-col vt-type">${voter.idType}</span>`;
+            html += `<span class="vt-col vt-addr" title="${addr}">${shortAddr}</span>`;
+            html += `<span class="vt-col vt-date">${verifiedDate}</span>`;
+            html += `<span class="vt-col vt-status">${authStatus}</span>`;
+            html += `<span class="vt-col vt-action">${authBtnHtml}</span>`;
+            html += '</div>';
+        }
+
+        html += '</div>';
+        html += `<p class="voters-count">Total verified voters: ${allVoters.length}</p>`;
+        listEl.innerHTML = html;
+
+        showNotification(`Loaded ${allVoters.length} verified voter(s) from blockchain`, 'success');
+
+    } catch (error) {
+        console.error('Error loading verified voters:', error);
+        listEl.innerHTML = '<p class="no-voters-msg">Error loading verified voters. Make sure the contract is deployed.</p>';
+        showNotification('Failed to load verified voters', 'error');
+    }
+}
+
+// Global function for inline authorize buttons
+window.authorizeVoterFromList = async function(voterAddress, proposalId) {
+    try {
+        showNotification(`Authorizing ${voterAddress.substring(0, 8)}... for proposal #${proposalId + 1}...`, 'info');
+        
+        const tx = await contract.authorizeVoter(voterAddress, proposalId);
+        await tx.wait();
+        
+        showNotification('✅ Voter authorized successfully!', 'success');
+        
+        // Refresh the list
+        await loadVerifiedVoters();
+        
+    } catch (error) {
+        console.error('Error authorizing voter:', error);
+        if (error.message.includes('Voter must complete identity verification')) {
+            showNotification('Voter has not completed identity verification', 'error');
+        } else if (error.message.includes('Only proposal creator')) {
+            showNotification('Only the proposal creator can authorize voters', 'error');
+        } else if (error.message.includes('user rejected')) {
+            showNotification('Authorization cancelled by user', 'warning');
+        } else {
+            showNotification('Failed to authorize voter', 'error');
+        }
+    }
+};
+
 // Admin: Authorize voter
 async function authorizeVoter() {
     const address = document.getElementById('voterAddress').value.trim();
@@ -786,6 +929,8 @@ async function authorizeVoter() {
         console.error('Error authorizing voter:', error);
         if (error.message.includes('Only proposal creator')) {
             showNotification('Only the proposal creator can authorize voters for this proposal', 'error');
+        } else if (error.message.includes('Voter must complete identity verification')) {
+            showNotification('This voter has not completed identity verification. They must verify their identity first at the ID Verification portal.', 'error');
         } else if (error.message.includes('Cannot authorize for proposal already voted on')) {
             showNotification('Cannot authorize: voter has already voted on this proposal', 'error');
         } else if (error.message.includes('user rejected')) {

@@ -12,6 +12,9 @@
         <header>
             <h1>🗳️ Decentralized Voting System</h1>
             <p class="subtitle">Secure, transparent voting powered by blockchain technology</p>
+            <div class="header-nav">
+                <a href="/verify" class="nav-link" id="verifyIdentityLink">🔐 Verify Your Identity</a>
+            </div>
         </header>
         
         <div id="connectSection" class="connect-wallet">
@@ -23,6 +26,7 @@
         <div id="appContent" class="hidden">
             <div class="status-bar">
                 <div class="account-info">Account: <span id="accountAddress"></span></div>
+                <div id="identityStatus" class="identity-status not-verified">🔐 Identity: <span id="identityStatusText">Not Verified</span></div>
                 <div id="votingStatus" class="voting-status inactive">Voting Inactive</div>
                 <div class="timer">Active Proposals: <span id="activeProposalsCount">0</span></div>
             </div>
@@ -133,15 +137,31 @@
                             <h3>👥 Authorize Voters</h3>
                         </div>
                         <div class="admin-section-content">
-                            <div class="form-group">
-                                <label for="voterAddress">Voter Address *</label>
-                                <input type="text" id="voterAddress" placeholder="0x...">
-                            </div>
+                            <p class="control-hint">Only voters who have completed identity verification can be authorized. Select a proposal, then pick from verified voters or enter an address manually.</p>
+                            
                             <div class="form-group">
                                 <label for="authProposalSelect">Select Your Proposal *</label>
                                 <select id="authProposalSelect">
                                     <option value="">-- Select a proposal --</option>
                                 </select>
+                            </div>
+
+                            <!-- Verified Voters List -->
+                            <div class="verified-voters-section">
+                                <div class="verified-voters-header">
+                                    <h4>✅ Verified Voters on Blockchain</h4>
+                                    <button id="refreshVerifiedVoters" class="admin-btn small-btn">🔄 Refresh</button>
+                                </div>
+                                <div id="verifiedVotersList" class="verified-voters-list">
+                                    <p class="no-voters-msg">Click "Refresh" to load verified voters from the blockchain</p>
+                                </div>
+                            </div>
+
+                            <div class="divider-small"></div>
+
+                            <div class="form-group">
+                                <label for="voterAddress">Or Enter Voter Address Manually *</label>
+                                <input type="text" id="voterAddress" placeholder="0x...">
                             </div>
                             <button id="authorizeVoter" class="admin-btn secondary">✅ Authorize for Proposal</button>
                         </div>

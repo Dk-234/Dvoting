@@ -10,17 +10,43 @@
     <div class="container">
         <header>
             <h1>🔐 Identity Verification System</h1>
-            <p>Secure ID extraction and verification for blockchain voting</p>
+            <p>Verify your identity to participate in blockchain voting</p>
+            <div class="header-nav">
+                <a href="/" class="nav-link">🗳️ Go to Voting Portal</a>
+            </div>
         </header>
 
+        <!-- Wallet Connection Bar -->
         <div class="status-bar">
             <div class="status-item">
-                <span class="status-label">System Status:</span>
-                <span class="status-value online" id="systemStatus">Checking...</span>
+                <span class="status-label">Wallet:</span>
+                <span class="status-value" id="walletStatus">Not Connected</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Wallet Address:</span>
+                <span class="status-value" id="walletAddress">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Verification Status:</span>
+                <span class="status-value" id="verificationOnChain">Not Verified</span>
             </div>
             <div class="status-item">
                 <span class="status-label">API Server:</span>
                 <span class="status-value" id="apiStatus">Disconnected</span>
+            </div>
+        </div>
+
+        <!-- Wallet Connect Section -->
+        <div class="card wallet-card" id="walletCard">
+            <h2>👛 Step 0: Connect Your Wallet</h2>
+            <p class="info-text">Connect your MetaMask wallet first. Your verified identity will be linked to this wallet address.</p>
+            <button id="connectWalletBtn" class="primary-btn">🦊 Connect MetaMask</button>
+            <div id="alreadyVerifiedBanner" class="verification-banner verified hidden" style="margin-top: 15px;">
+                <div class="banner-icon">✅</div>
+                <div class="banner-text">
+                    <h3>Already Verified!</h3>
+                    <p id="alreadyVerifiedInfo">Your identity is already registered on the blockchain. You can proceed to the voting portal.</p>
+                </div>
             </div>
         </div>
 
@@ -111,7 +137,7 @@
                         </div>
                         <div class="step" id="step4">
                             <div class="step-icon">⏳</div>
-                            <span>Cross-verifying extracted data</span>
+                            <span>Cross-verifying your details</span>
                         </div>
                         <div class="step" id="step5">
                             <div class="step-icon">⏳</div>
@@ -199,7 +225,7 @@
 
                 <div class="action-buttons">
                     <button id="registerBlockchainBtn" class="secondary-btn hidden">
-                        ⛓️ Register on Blockchain
+                        ⛓️ Register Identity on Blockchain
                     </button>
                     <button id="downloadDataBtn" class="secondary-btn">
                         📥 Download Verification Data
@@ -207,6 +233,15 @@
                     <button id="resetBtn" class="secondary-btn">
                         🔄 New Verification
                     </button>
+                </div>
+
+                <!-- Blockchain Registration Status -->
+                <div id="blockchainRegStatus" class="verification-banner hidden" style="margin-top: 15px;">
+                    <div class="banner-icon" id="regStatusIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="regStatusTitle">Registering...</h3>
+                        <p id="regStatusSubtitle">Submitting your verification to the blockchain</p>
+                    </div>
                 </div>
 
                 <details class="ocr-debug" style="margin-top: 20px;">
@@ -219,14 +254,16 @@
             <div class="card instructions-card">
                 <h2>📝 How It Works</h2>
                 <ol>
+                    <li><strong>Connect your wallet</strong> — Link your MetaMask wallet (your verified identity will be tied to this address)</li>
                     <li><strong>Enter your details</strong> — Fill in your ID type, ID number, name, and date of birth exactly as on your ID</li>
                     <li><strong>Upload your ID photo</strong> — Take a clear photo of your government-issued ID</li>
                     <li><strong>Cross-verification</strong> — The system extracts text from the ID image using OCR and compares it with the details you entered</li>
-                    <li><strong>View results</strong> — See field-by-field match/mismatch comparison</li>
-                    <li><strong>Blockchain registration</strong> — If verified, register a secure hash on the blockchain for voting eligibility</li>
+                    <li><strong>Blockchain registration</strong> — If verified, register a secure hash on the blockchain to prove your identity</li>
+                    <li><strong>Get authorized</strong> — Proposal creators can now see your verified status and authorize you to vote</li>
                 </ol>
                 <div class="warning">
                     ⚠️ Your actual ID number is NEVER stored. Only a secure hash is saved on the blockchain.
+                    <br>⚠️ Each ID can only be registered with ONE wallet address to prevent duplicate voting.
                 </div>
             </div>
         </div>
@@ -238,6 +275,13 @@
     </div>
 
     <div id="notification" class="notification"></div>
+
+    <!-- Load Ethers.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+    
+    <!-- Load contract config (auto-generated by deploy script) -->
+    <script src="contractAddress.js"></script>
+    <script src="contractABI.js"></script>
 
     <script src="app.js"></script>
 </body>

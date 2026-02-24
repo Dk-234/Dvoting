@@ -775,3 +775,79 @@ input[type="file"] {
         justify-content: flex-start;
     }
 }
+
+/* ─── Wallet & Navigation Styles ─────────────────── */
+
+.header-nav {
+    margin-top: 15px;
+}
+
+.nav-link {
+    display: inline-block;
+    padding: 10px 20px;
+    background: var(--secondary);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.wallet-card {
+    text-align: center;
+    border: 2px dashed var(--secondary);
+    background: rgba(52, 152, 219, 0.03);
+}
+
+.wallet-card .primary-btn {
+    font-size: 1.1rem;
+    padding: 14px 32px;
+}
+
+.verification-banner.verified {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    border: 2px solid var(--success);
+    border-radius: 12px;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.verification-banner.failed {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    border: 2px solid var(--danger);
+    border-radius: 12px;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.banner-icon {
+    font-size: 2rem;
+}
+
+.banner-text h3 {
+    margin-bottom: 4px;
+    color: var(--primary);
+}
+
+.banner-text p {
+    color: #555;
+    font-size: 0.9rem;
+}
+
+#blockchainRegStatus {
+    border-radius: 12px;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}

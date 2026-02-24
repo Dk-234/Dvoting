@@ -27,6 +27,16 @@ contract Voting {
         uint256 votedOptionId;
     }
 
+    // ── Identity Verification ──
+    struct VerifiedVoter {
+        address walletAddress;
+        string idHash;        // SHA-256 hash of ID details (privacy-preserving)
+        string name;          // voter's name from ID verification
+        string idType;        // type of ID used (e.g., "Aadhaar Card", "PAN Card")
+        uint256 verifiedAt;   // timestamp of verification
+        bool isVerified;      // whether this voter is verified
+    }
+
     address public owner;
     string public votingTitle;
 
@@ -40,12 +50,18 @@ contract Voting {
     mapping(address => mapping(uint256 => bool)) public proposalVoted;
     uint256 public totalVotes;
 
+    // ── Identity Verification State ──
+    mapping(address => VerifiedVoter) public verifiedVoters;
+    address[] public verifiedVoterAddresses;  // for enumeration
+    mapping(string => bool) public usedIdHashes; // prevent same ID registering with multiple wallets
+
     event VoteCast(address indexed voter, uint256 proposalId, uint256 optionId);
     event VotingStarted(uint256 indexed proposalId, uint256 startTime, uint256 duration);
     event VotingEnded(uint256 indexed proposalId, uint256 endTime, uint256 proposalTotalVotes);
     event ProposalAdded(uint256 proposalId, string name);
     event VotingOptionAdded(uint256 proposalId, uint256 optionId, string optionName);
     event VoterAuthorized(address indexed voter, uint256 proposalId);
+    event VoterIdentityRegistered(address indexed voter, string name, string idType, uint256 timestamp);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Only owner can perform this action");
@@ -61,6 +77,69 @@ contract Voting {
     constructor(string memory _title) {
         owner = msg.sender;
         votingTitle = _title;
+    }
+
+    // ════════════════════════════════════════════════
+    //  IDENTITY VERIFICATION FUNCTIONS
+    // ════════════════════════════════════════════════
+
+    /// @notice Register a verified voter identity on-chain (called after ID verification)
+    /// @param _idHash SHA-256 hash of the voter's ID details (never stores raw ID)
+    /// @param _name Voter's name as verified from their ID document
+    /// @param _idType Type of ID document used for verification
+    function registerVerifiedVoter(
+        string memory _idHash,
+        string memory _name,
+        string memory _idType
+    ) public {
+        require(bytes(_idHash).length > 0, "ID hash cannot be empty");
+        require(bytes(_name).length > 0, "Name cannot be empty");
+        require(bytes(_idType).length > 0, "ID type cannot be empty");
+        require(!verifiedVoters[msg.sender].isVerified, "Wallet already verified");
+        require(!usedIdHashes[_idHash], "This ID has already been registered with another wallet");
+
+        verifiedVoters[msg.sender] = VerifiedVoter({
+            walletAddress: msg.sender,
+            idHash: _idHash,
+            name: _name,
+            idType: _idType,
+            verifiedAt: block.timestamp,
+            isVerified: true
+        });
+
+        verifiedVoterAddresses.push(msg.sender);
+        usedIdHashes[_idHash] = true;
+
+        emit VoterIdentityRegistered(msg.sender, _name, _idType, block.timestamp);
+    }
+
+    /// @notice Check if a voter's identity is verified
+    function isVoterVerified(address _voter) public view returns (bool) {
+        return verifiedVoters[_voter].isVerified;
+    }
+
+    /// @notice Get details of a verified voter
+    function getVerifiedVoter(address _voter) public view returns (VerifiedVoter memory) {
+        return verifiedVoters[_voter];
+    }
+
+    /// @notice Get all verified voter addresses
+    function getVerifiedVoterAddresses() public view returns (address[] memory) {
+        return verifiedVoterAddresses;
+    }
+
+    /// @notice Get all verified voters with their details
+    function getAllVerifiedVoters() public view returns (VerifiedVoter[] memory) {
+        VerifiedVoter[] memory allVoters = new VerifiedVoter[](verifiedVoterAddresses.length);
+        for (uint256 i = 0; i < verifiedVoterAddresses.length; i++) {
+            allVoters[i] = verifiedVoters[verifiedVoterAddresses[i]];
+        }
+        return allVoters;
+    }
+
+    /// @notice Get count of verified voters
+    function getVerifiedVoterCount() public view returns (uint256) {
+        return verifiedVoterAddresses.length;
     }
 
     // Any user can add a proposal at any time
@@ -111,7 +190,9 @@ contract Voting {
     }
 
     // Only the proposal creator can authorize voters for their proposal
+    // Voter must have completed identity verification before being authorized
     function authorizeVoter(address _voter, uint256 _proposalId) public onlyProposalCreator(_proposalId) {
+        require(verifiedVoters[_voter].isVerified, "Voter must complete identity verification first");
         require(!proposalVoted[_voter][_proposalId], "Cannot authorize for proposal already voted on");
 
         voterProposalAuthorization[_voter][_proposalId] = true;
@@ -135,6 +216,7 @@ contract Voting {
 
     function vote(uint256 _proposalId, uint256 _optionId) public {
         require(_proposalId < proposals.length, "Invalid proposal");
+        require(verifiedVoters[msg.sender].isVerified, "Must complete identity verification before voting");
         Proposal storage proposal = proposals[_proposalId];
         require(proposal.votingActive, "Voting is not active for this proposal");
         require(block.timestamp < proposal.startTime + proposal.duration, "Voting period has ended for this proposal");

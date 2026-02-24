@@ -1,19 +1,30 @@
-// frontend/app.js
+// frontend/app.js — ID Verification with Blockchain Integration
 const API_URL = window.location.origin || 'http://localhost:3001';
+
+// ─── Blockchain State ─────────────────────────────────
+let provider = null;
+let signer = null;
+let votingContract = null;
+let walletAccount = null;
 
 // ─── DOM Elements ─────────────────────────────────────
 
-const systemStatus  = document.getElementById('systemStatus');
-const apiStatus     = document.getElementById('apiStatus');
-const uploadArea    = document.getElementById('uploadArea');
-const fileInput     = document.getElementById('fileInput');
-const uploadBtn     = document.getElementById('uploadBtn');
-const previewCard   = document.getElementById('previewCard');
-const imagePreview  = document.getElementById('imagePreview');
-const resultsCard   = document.getElementById('resultsCard');
-const sessionInfo   = document.getElementById('sessionInfo');
-const sessionIdSpan = document.getElementById('sessionId');
-const notification  = document.getElementById('notification');
+const walletStatus    = document.getElementById('walletStatus');
+const walletAddressEl = document.getElementById('walletAddress');
+const verificationOnChainEl = document.getElementById('verificationOnChain');
+const apiStatus       = document.getElementById('apiStatus');
+const connectWalletBtn = document.getElementById('connectWalletBtn');
+const alreadyVerifiedBanner = document.getElementById('alreadyVerifiedBanner');
+const alreadyVerifiedInfo   = document.getElementById('alreadyVerifiedInfo');
+const uploadArea      = document.getElementById('uploadArea');
+const fileInput       = document.getElementById('fileInput');
+const uploadBtn       = document.getElementById('uploadBtn');
+const previewCard     = document.getElementById('previewCard');
+const imagePreview    = document.getElementById('imagePreview');
+const resultsCard     = document.getElementById('resultsCard');
+const sessionInfo     = document.getElementById('sessionInfo');
+const sessionIdSpan   = document.getElementById('sessionId');
+const notification    = document.getElementById('notification');
 
 // User input fields
 const userIdType   = document.getElementById('userIdType');
@@ -54,6 +65,12 @@ const registerBlockchainBtn = document.getElementById('registerBlockchainBtn');
 const downloadDataBtn       = document.getElementById('downloadDataBtn');
 const resetBtn              = document.getElementById('resetBtn');
 
+// Blockchain registration status
+const blockchainRegStatus = document.getElementById('blockchainRegStatus');
+const regStatusIcon       = document.getElementById('regStatusIcon');
+const regStatusTitle      = document.getElementById('regStatusTitle');
+const regStatusSubtitle   = document.getElementById('regStatusSubtitle');
+
 // Processing overlay
 const processingOverlay = document.getElementById('processingOverlay');
 const progressBar       = document.getElementById('progressBar');
@@ -74,6 +91,130 @@ const ID_TYPE_LABELS = {
     passport: 'Passport'
 };
 
+// ─── Wallet Connection ────────────────────────────────
+
+connectWalletBtn.addEventListener('click', connectWallet);
+
+async function connectWallet() {
+    if (typeof window.ethereum === 'undefined') {
+        showNotification('Please install MetaMask to register your identity on blockchain', 'error');
+        return;
+    }
+
+    try {
+        showNotification('Connecting to MetaMask...', 'info');
+        var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+        if (accounts.length > 0) {
+            walletAccount = accounts[0];
+            provider = new ethers.BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
+
+            // Check network
+            var network = await provider.getNetwork();
+            var chainId = Number(network.chainId);
+            if (chainId !== 1337) {
+                showNotification('Please switch to Hardhat Local network (Chain ID: 1337)', 'error');
+                return;
+            }
+
+            // Initialize voting contract
+            if (typeof VOTING_CONTRACT_ADDRESS !== 'undefined' && typeof VOTING_CONTRACT_ABI !== 'undefined') {
+                votingContract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_CONTRACT_ABI, signer);
+            } else {
+                showNotification('Contract config not found. Please deploy the contract first.', 'error');
+                return;
+            }
+
+            // Update UI
+            walletStatus.textContent = 'Connected';
+            walletStatus.className = 'status-value online';
+            walletAddressEl.textContent = walletAccount.substring(0, 6) + '...' + walletAccount.substring(walletAccount.length - 4);
+            connectWalletBtn.textContent = '✅ Wallet Connected';
+            connectWalletBtn.disabled = true;
+
+            showNotification('Wallet connected successfully!', 'success');
+
+            // Check if already verified on-chain
+            await checkOnChainVerification();
+        }
+    } catch (error) {
+        console.error('Wallet connection error:', error);
+        showNotification('Failed to connect wallet: ' + error.message, 'error');
+    }
+
+    // Listen for account changes
+    if (window.ethereum) {
+        window.ethereum.on('accountsChanged', async function (accounts) {
+            if (accounts.length > 0) {
+                walletAccount = accounts[0];
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                votingContract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_CONTRACT_ABI, signer);
+                walletAddressEl.textContent = walletAccount.substring(0, 6) + '...' + walletAccount.substring(walletAccount.length - 4);
+                await checkOnChainVerification();
+            }
+        });
+    }
+}
+
+async function checkOnChainVerification() {
+    if (!votingContract || !walletAccount) return;
+
+    try {
+        var isVerified = await votingContract.isVoterVerified(walletAccount);
+        if (isVerified) {
+            verificationOnChainEl.textContent = '✅ Verified';
+            verificationOnChainEl.className = 'status-value online';
+
+            // Get voter details
+            var voter = await votingContract.getVerifiedVoter(walletAccount);
+            alreadyVerifiedInfo.textContent =
+                'Registered as "' + voter.name + '" (' + voter.idType + ') on ' +
+                new Date(Number(voter.verifiedAt) * 1000).toLocaleDateString() +
+                '. You can proceed to the voting portal.';
+            alreadyVerifiedBanner.classList.remove('hidden');
+        } else {
+            verificationOnChainEl.textContent = 'Not Verified';
+            verificationOnChainEl.className = 'status-value offline';
+            alreadyVerifiedBanner.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error checking on-chain verification:', error);
+        verificationOnChainEl.textContent = 'Error';
+    }
+}
+
+// Auto-connect wallet on page load
+async function autoConnectWallet() {
+    if (typeof window.ethereum !== 'undefined') {
+        try {
+            var accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts.length > 0) {
+                walletAccount = accounts[0];
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+
+                var network = await provider.getNetwork();
+                if (Number(network.chainId) === 1337) {
+                    if (typeof VOTING_CONTRACT_ADDRESS !== 'undefined' && typeof VOTING_CONTRACT_ABI !== 'undefined') {
+                        votingContract = new ethers.Contract(VOTING_CONTRACT_ADDRESS, VOTING_CONTRACT_ABI, signer);
+                    }
+                    walletStatus.textContent = 'Connected';
+                    walletStatus.className = 'status-value online';
+                    walletAddressEl.textContent = walletAccount.substring(0, 6) + '...' + walletAccount.substring(walletAccount.length - 4);
+                    connectWalletBtn.textContent = '✅ Wallet Connected';
+                    connectWalletBtn.disabled = true;
+                    await checkOnChainVerification();
+                }
+            }
+        } catch (e) {
+            console.log('Auto-connect skipped:', e.message);
+        }
+    }
+}
+autoConnectWallet();
+
 // ─── Health Check ─────────────────────────────────────
 
 async function checkHealth() {
@@ -82,8 +223,6 @@ async function checkHealth() {
         const data = await response.json();
 
         if (response.ok) {
-            systemStatus.textContent = 'Online';
-            systemStatus.className  = 'status-value online';
             apiStatus.textContent   = 'Connected';
             apiStatus.className     = 'status-value online';
         } else {
@@ -91,8 +230,6 @@ async function checkHealth() {
         }
     } catch (error) {
         console.error('Health check failed:', error);
-        systemStatus.textContent = 'Offline';
-        systemStatus.className  = 'status-value offline';
         apiStatus.textContent   = 'Disconnected';
         apiStatus.className     = 'status-value offline';
         showNotification('Cannot connect to API server', 'error');
@@ -406,9 +543,22 @@ function displayResults(data) {
         hashResult.textContent = 'No hash generated';
     }
 
-    // Show blockchain button ONLY if ALL fields verified
+    // Show blockchain button ONLY if ALL fields verified AND wallet is connected
     if (overallStatus === 'verified') {
-        registerBlockchainBtn.classList.remove('hidden');
+        if (walletAccount && votingContract) {
+            registerBlockchainBtn.classList.remove('hidden');
+            // Check if already registered
+            votingContract.isVoterVerified(walletAccount).then(function(isVerified) {
+                if (isVerified) {
+                    registerBlockchainBtn.disabled = true;
+                    registerBlockchainBtn.textContent = '✅ Already Registered on Blockchain';
+                }
+            }).catch(function() {});
+        } else {
+            registerBlockchainBtn.classList.remove('hidden');
+            registerBlockchainBtn.disabled = true;
+            registerBlockchainBtn.textContent = '👛 Connect Wallet First to Register';
+        }
     } else {
         registerBlockchainBtn.classList.add('hidden');
     }
@@ -441,7 +591,7 @@ function setMatchBadge(badgeEl, status, rowEl) {
     }
 }
 
-// ─── Blockchain Registration ──────────────────────────
+// ─── Blockchain Registration (Real) ───────────────────
 
 registerBlockchainBtn.addEventListener('click', async function () {
     if (!currentSessionId || !verificationData) {
@@ -449,13 +599,88 @@ registerBlockchainBtn.addEventListener('click', async function () {
         return;
     }
 
-    showNotification('Preparing blockchain transaction...', 'info');
+    if (!votingContract || !walletAccount) {
+        showNotification('Please connect your MetaMask wallet first', 'error');
+        return;
+    }
 
-    setTimeout(function () {
-        showNotification('Hash registered on blockchain (simulated)', 'success');
-        registerBlockchainBtn.disabled    = true;
-        registerBlockchainBtn.textContent = '✅ Registered';
-    }, 2000);
+    // Check if already verified
+    try {
+        var alreadyVerified = await votingContract.isVoterVerified(walletAccount);
+        if (alreadyVerified) {
+            showNotification('Your identity is already registered on the blockchain!', 'info');
+            registerBlockchainBtn.disabled = true;
+            registerBlockchainBtn.textContent = '✅ Already Registered';
+            return;
+        }
+    } catch (e) {
+        console.error('Error checking verification:', e);
+    }
+
+    // Get the data to register
+    var idHash = verificationData.hash;
+    var voterName = (verificationData.userInput && verificationData.userInput.name) || '';
+    var idTypeLabel = ID_TYPE_LABELS[(verificationData.userInput && verificationData.userInput.idType)] || 'Unknown';
+
+    if (!idHash) {
+        showNotification('No verification hash available', 'error');
+        return;
+    }
+
+    // Show registration status
+    blockchainRegStatus.classList.remove('hidden');
+    blockchainRegStatus.className = 'verification-banner';
+    regStatusIcon.textContent = '⏳';
+    regStatusTitle.textContent = 'Registering on Blockchain...';
+    regStatusSubtitle.textContent = 'Please confirm the transaction in MetaMask';
+
+    registerBlockchainBtn.disabled = true;
+    registerBlockchainBtn.textContent = '⏳ Registering...';
+
+    try {
+        showNotification('Submitting identity verification to blockchain...', 'info');
+
+        var tx = await votingContract.registerVerifiedVoter(idHash, voterName, idTypeLabel);
+        regStatusSubtitle.textContent = 'Transaction submitted. Waiting for confirmation...';
+
+        await tx.wait();
+
+        // Success
+        blockchainRegStatus.className = 'verification-banner verified';
+        regStatusIcon.textContent = '✅';
+        regStatusTitle.textContent = 'Identity Registered on Blockchain!';
+        regStatusSubtitle.textContent = 'Your verified identity is now stored on-chain. Proposal creators can authorize you to vote.';
+
+        registerBlockchainBtn.textContent = '✅ Registered on Blockchain';
+        showNotification('🎉 Identity registered on blockchain! You can now be authorized to vote.', 'success');
+
+        // Update status bar
+        await checkOnChainVerification();
+
+    } catch (error) {
+        console.error('Blockchain registration error:', error);
+
+        blockchainRegStatus.className = 'verification-banner failed';
+        regStatusIcon.textContent = '❌';
+        regStatusTitle.textContent = 'Registration Failed';
+
+        if (error.message.includes('user rejected')) {
+            regStatusSubtitle.textContent = 'Transaction was cancelled by user.';
+            showNotification('Transaction cancelled', 'warning');
+        } else if (error.message.includes('already verified')) {
+            regStatusSubtitle.textContent = 'This wallet is already verified.';
+            showNotification('Wallet already verified!', 'info');
+        } else if (error.message.includes('already been registered')) {
+            regStatusSubtitle.textContent = 'This ID has already been registered with another wallet address. Each ID can only be used once.';
+            showNotification('This ID is already registered with another wallet!', 'error');
+        } else {
+            regStatusSubtitle.textContent = 'Error: ' + error.message.substring(0, 100);
+            showNotification('Failed to register on blockchain', 'error');
+        }
+
+        registerBlockchainBtn.disabled = false;
+        registerBlockchainBtn.textContent = '⛓️ Register Identity on Blockchain';
+    }
 });
 
 // ─── Download Data ────────────────────────────────────
