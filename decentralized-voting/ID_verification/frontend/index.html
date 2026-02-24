@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identity Verification System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔐 Identity Verification System</h1>
+            <p>Secure ID extraction and verification for blockchain voting</p>
+        </header>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">System Status:</span>
+                <span class="status-value online" id="systemStatus">Checking...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">API Server:</span>
+                <span class="status-value" id="apiStatus">Disconnected</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Step 1: Enter Details -->
+            <div class="card details-card">
+                <h2>📝 Step 1: Enter Your Details</h2>
+                <p class="info-text">Fill in your details exactly as they appear on your ID document</p>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="userIdType">ID Type <span class="required">*</span></label>
+                        <select id="userIdType" required>
+                            <option value="">-- Select ID Type --</option>
+                            <option value="aadhaar">Aadhaar Card</option>
+                            <option value="pan">PAN Card</option>
+                            <option value="voter_id">Voter ID (EPIC)</option>
+                            <option value="driving_license">Driving License</option>
+                            <option value="passport">Passport</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userIdNumber">ID Number <span class="required">*</span></label>
+                        <input type="text" id="userIdNumber" placeholder="e.g. 1234 5678 9012" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userName">Full Name <span class="required">*</span></label>
+                        <input type="text" id="userName" placeholder="Name as on your ID" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userDob">Date of Birth <span class="required">*</span></label>
+                        <input type="date" id="userDob" required>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Upload Section -->
+            <div class="card upload-card">
+                <h2>📤 Step 2: Upload ID Document</h2>
+                <p class="info-text">Upload a clear photo of your ID so we can cross-verify the details you entered</p>
+                
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept="image/*" title="Upload an ID document image">
+                    <div class="upload-icon">📷</div>
+                    <p>Click to select or drag and drop</p>
+                    <p class="file-hint">Supported: JPG, PNG, GIF, BMP (Max 10MB)</p>
+                </div>
+
+                <button id="uploadBtn" class="primary-btn" disabled>
+                    <span class="btn-text">🔍 Verify Identity</span>
+                    <span class="loading-spinner hidden"></span>
+                </button>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="card preview-card hidden" id="previewCard">
+                <h2>📋 Document Preview</h2>
+                <div class="preview-container">
+                    <img id="imagePreview" src="" alt="Document preview">
+                </div>
+            </div>
+
+            <!-- Processing Overlay -->
+            <div class="processing-overlay hidden" id="processingOverlay">
+                <div class="processing-card">
+                    <div class="processing-animation">
+                        <div class="scan-line"></div>
+                        <div class="doc-icon">🪪</div>
+                    </div>
+                    <h2>Processing Document</h2>
+                    <p class="processing-subtitle">Please wait while we analyze your ID...</p>
+
+                    <div class="processing-steps">
+                        <div class="step" id="step1">
+                            <div class="step-icon">⏳</div>
+                            <span>Preprocessing image (enhancing quality)</span>
+                        </div>
+                        <div class="step" id="step2">
+                            <div class="step-icon">⏳</div>
+                            <span>Running OCR text extraction</span>
+                        </div>
+                        <div class="step" id="step3">
+                            <div class="step-icon">⏳</div>
+                            <span>Scanning for QR / barcodes</span>
+                        </div>
+                        <div class="step" id="step4">
+                            <div class="step-icon">⏳</div>
+                            <span>Cross-verifying extracted data</span>
+                        </div>
+                        <div class="step" id="step5">
+                            <div class="step-icon">⏳</div>
+                            <span>Generating secure hash</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">Starting...</p>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="card results-card hidden" id="resultsCard">
+                <h2>📊 Verification Results</h2>
+
+                <!-- Overall Status Banner -->
+                <div class="verification-banner" id="verificationBanner">
+                    <div class="banner-icon" id="bannerIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="bannerTitle">Processing...</h3>
+                        <p id="bannerSubtitle">Comparing your details with the ID document</p>
+                    </div>
+                </div>
+
+                <!-- Comparison Table -->
+                <div class="comparison-table">
+                    <div class="comparison-header">
+                        <div class="comp-col comp-field">Field</div>
+                        <div class="comp-col comp-user">Your Input</div>
+                        <div class="comp-col comp-extracted">Search Result (in ID image)</div>
+                        <div class="comp-col comp-status">Match</div>
+                    </div>
+
+                    <div class="comparison-row" id="compIdType">
+                        <div class="comp-col comp-field">ID Type</div>
+                        <div class="comp-col comp-user" id="compUserIdType">-</div>
+                        <div class="comp-col comp-extracted" id="compExtIdType">-</div>
+                        <div class="comp-col comp-status"><span class="match-badge" id="matchIdType">-</span></div>
+                    </div>
+
+                    <div class="comparison-row" id="compIdNumber">
+                        <div class="comp-col comp-field">ID Number</div>
+                        <div class="comp-col comp-user" id="compUserIdNumber">-</div>
+                        <div class="comp-col comp-extracted" id="compExtIdNumber">-</div>
+                        <div class="comp-col comp-status"><span class="match-badge" id="matchIdNumber">-</span></div>
+                    </div>
+
+                    <div class="comparison-row" id="compName">
+                        <div class="comp-col comp-field">Full Name</div>
+                        <div class="comp-col comp-user" id="compUserName">-</div>
+                        <div class="comp-col comp-extracted" id="compExtName">-</div>
+                        <div class="comp-col comp-status"><span class="match-badge" id="matchName">-</span></div>
+                    </div>
+
+                    <div class="comparison-row" id="compDob">
+                        <div class="comp-col comp-field">Date of Birth</div>
+                        <div class="comp-col comp-user" id="compUserDob">-</div>
+                        <div class="comp-col comp-extracted" id="compExtDob">-</div>
+                        <div class="comp-col comp-status"><span class="match-badge" id="matchDob">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Additional Info -->
+                <div class="result-extras">
+                    <div class="result-item">
+                        <div class="result-label">Overall Confidence:</div>
+                        <div class="result-value" id="confidenceResult">-</div>
+                        <div class="result-badge" id="confidenceBadge">-</div>
+                    </div>
+
+                    <div class="result-item">
+                        <div class="result-label">QR Code Data:</div>
+                        <div class="result-value" id="qrResult">-</div>
+                        <div class="result-badge" id="qrBadge">-</div>
+                    </div>
+
+                    <div class="result-item">
+                        <div class="result-label">Hash (for blockchain):</div>
+                        <div class="result-value hash-value" id="hashResult">-</div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="registerBlockchainBtn" class="secondary-btn hidden">
+                        ⛓️ Register on Blockchain
+                    </button>
+                    <button id="downloadDataBtn" class="secondary-btn">
+                        📥 Download Verification Data
+                    </button>
+                    <button id="resetBtn" class="secondary-btn">
+                        🔄 New Verification
+                    </button>
+                </div>
+
+                <details class="ocr-debug" style="margin-top: 20px;">
+                    <summary style="cursor:pointer; color:#666; font-size:0.9rem;">🔍 Show Raw OCR Text (for debugging)</summary>
+                    <pre id="rawOcrText" style="background:#f5f5f5; padding:12px; border-radius:8px; font-size:0.8rem; max-height:300px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; margin-top:10px; border:1px solid #ddd;">-</pre>
+                </details>
+            </div>
+
+            <!-- Instructions Card -->
+            <div class="card instructions-card">
+                <h2>📝 How It Works</h2>
+                <ol>
+                    <li><strong>Enter your details</strong> — Fill in your ID type, ID number, name, and date of birth exactly as on your ID</li>
+                    <li><strong>Upload your ID photo</strong> — Take a clear photo of your government-issued ID</li>
+                    <li><strong>Cross-verification</strong> — The system extracts text from the ID image using OCR and compares it with the details you entered</li>
+                    <li><strong>View results</strong> — See field-by-field match/mismatch comparison</li>
+                    <li><strong>Blockchain registration</strong> — If verified, register a secure hash on the blockchain for voting eligibility</li>
+                </ol>
+                <div class="warning">
+                    ⚠️ Your actual ID number is NEVER stored. Only a secure hash is saved on the blockchain.
+                </div>
+            </div>
+        </div>
+
+        <!-- Session Info -->
+        <div class="session-info hidden" id="sessionInfo">
+            <span>Session ID: <span id="sessionId">-</span></span>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

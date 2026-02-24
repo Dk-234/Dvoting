@@ -28,47 +28,82 @@ export declare namespace Voting {
     id: BigNumberish;
     name: string;
     description: string;
-    voteCount: BigNumberish;
     ipfsHash: string;
+    totalVotes: BigNumberish;
+    optionsCount: BigNumberish;
+    creator: AddressLike;
+    startTime: BigNumberish;
+    duration: BigNumberish;
+    votingActive: boolean;
   };
 
   export type ProposalStructOutput = [
     id: bigint,
     name: string,
     description: string,
-    voteCount: bigint,
-    ipfsHash: string
+    ipfsHash: string,
+    totalVotes: bigint,
+    optionsCount: bigint,
+    creator: string,
+    startTime: bigint,
+    duration: bigint,
+    votingActive: boolean
   ] & {
     id: bigint;
     name: string;
     description: string;
-    voteCount: bigint;
     ipfsHash: string;
+    totalVotes: bigint;
+    optionsCount: bigint;
+    creator: string;
+    startTime: bigint;
+    duration: bigint;
+    votingActive: boolean;
   };
+
+  export type VotingOptionStruct = {
+    id: BigNumberish;
+    name: string;
+    voteCount: BigNumberish;
+  };
+
+  export type VotingOptionStructOutput = [
+    id: bigint,
+    name: string,
+    voteCount: bigint
+  ] & { id: bigint; name: string; voteCount: bigint };
 }
 
 export interface VotingInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "addForAgainstOptions"
       | "addProposal"
+      | "addVotingOption"
       | "authorizeVoter"
       | "endVoting"
       | "getProposal"
+      | "getProposalOption"
+      | "getProposalOptions"
+      | "getProposalResults"
       | "getProposals"
       | "getProposalsCount"
       | "getResults"
+      | "getVoterChoice"
       | "hasVoted"
-      | "isAuthorized"
+      | "hasVotedOnProposal"
+      | "isAuthorizedForProposal"
+      | "isProposalVotingActive"
       | "owner"
+      | "proposalOptions"
+      | "proposalVoted"
       | "proposals"
-      | "startTime"
       | "startVoting"
       | "timeRemaining"
       | "totalVotes"
       | "vote"
+      | "voterProposalAuthorization"
       | "voters"
-      | "votingActive"
-      | "votingDuration"
       | "votingTitle"
   ): FunctionFragment;
 
@@ -78,20 +113,44 @@ export interface VotingInterface extends Interface {
       | "VoteCast"
       | "VoterAuthorized"
       | "VotingEnded"
+      | "VotingOptionAdded"
       | "VotingStarted"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "addForAgainstOptions",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "addProposal",
     values: [string, string, string]
   ): string;
   encodeFunctionData(
-    functionFragment: "authorizeVoter",
-    values: [AddressLike]
+    functionFragment: "addVotingOption",
+    values: [BigNumberish, string]
   ): string;
-  encodeFunctionData(functionFragment: "endVoting", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "authorizeVoter",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "endVoting",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "getProposal",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getProposalOption",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getProposalOptions",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getProposalResults",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -107,48 +166,74 @@ export interface VotingInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "getVoterChoice",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "hasVoted",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "isAuthorized",
-    values: [AddressLike]
+    functionFragment: "hasVotedOnProposal",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isAuthorizedForProposal",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isProposalVotingActive",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "proposalOptions",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "proposalVoted",
+    values: [AddressLike, BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "proposals",
     values: [BigNumberish]
   ): string;
-  encodeFunctionData(functionFragment: "startTime", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "startVoting",
-    values?: undefined
+    values: [BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "timeRemaining",
-    values?: undefined
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "totalVotes",
     values?: undefined
   ): string;
-  encodeFunctionData(functionFragment: "vote", values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: "vote",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "voterProposalAuthorization",
+    values: [AddressLike, BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "voters", values: [AddressLike]): string;
-  encodeFunctionData(
-    functionFragment: "votingActive",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "votingDuration",
-    values?: undefined
-  ): string;
   encodeFunctionData(
     functionFragment: "votingTitle",
     values?: undefined
   ): string;
 
   decodeFunctionResult(
+    functionFragment: "addForAgainstOptions",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "addProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addVotingOption",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -161,6 +246,18 @@ export interface VotingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "getProposalOption",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getProposalOptions",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getProposalResults",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "getProposals",
     data: BytesLike
   ): Result;
@@ -169,14 +266,33 @@ export interface VotingInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getResults", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getVoterChoice",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "hasVoted", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "isAuthorized",
+    functionFragment: "hasVotedOnProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isAuthorizedForProposal",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isProposalVotingActive",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "proposalOptions",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "proposalVoted",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "proposals", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "startTime", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "startVoting",
     data: BytesLike
@@ -187,15 +303,11 @@ export interface VotingInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "totalVotes", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "vote", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "voterProposalAuthorization",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "voters", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "votingActive",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "votingDuration",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "votingTitle",
     data: BytesLike
@@ -216,6 +328,28 @@ export namespace ProposalAddedEvent {
 }
 
 export namespace VoteCastEvent {
+  export type InputTuple = [
+    voter: AddressLike,
+    proposalId: BigNumberish,
+    optionId: BigNumberish
+  ];
+  export type OutputTuple = [
+    voter: string,
+    proposalId: bigint,
+    optionId: bigint
+  ];
+  export interface OutputObject {
+    voter: string;
+    proposalId: bigint;
+    optionId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace VoterAuthorizedEvent {
   export type InputTuple = [voter: AddressLike, proposalId: BigNumberish];
   export type OutputTuple = [voter: string, proposalId: bigint];
   export interface OutputObject {
@@ -228,11 +362,21 @@ export namespace VoteCastEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace VoterAuthorizedEvent {
-  export type InputTuple = [voter: AddressLike];
-  export type OutputTuple = [voter: string];
+export namespace VotingEndedEvent {
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    endTime: BigNumberish,
+    proposalTotalVotes: BigNumberish
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    endTime: bigint,
+    proposalTotalVotes: bigint
+  ];
   export interface OutputObject {
-    voter: string;
+    proposalId: bigint;
+    endTime: bigint;
+    proposalTotalVotes: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -240,12 +384,21 @@ export namespace VoterAuthorizedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace VotingEndedEvent {
-  export type InputTuple = [endTime: BigNumberish, totalVotes: BigNumberish];
-  export type OutputTuple = [endTime: bigint, totalVotes: bigint];
+export namespace VotingOptionAddedEvent {
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    optionId: BigNumberish,
+    optionName: string
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    optionId: bigint,
+    optionName: string
+  ];
   export interface OutputObject {
-    endTime: bigint;
-    totalVotes: bigint;
+    proposalId: bigint;
+    optionId: bigint;
+    optionName: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -254,9 +407,18 @@ export namespace VotingEndedEvent {
 }
 
 export namespace VotingStartedEvent {
-  export type InputTuple = [startTime: BigNumberish, duration: BigNumberish];
-  export type OutputTuple = [startTime: bigint, duration: bigint];
+  export type InputTuple = [
+    proposalId: BigNumberish,
+    startTime: BigNumberish,
+    duration: BigNumberish
+  ];
+  export type OutputTuple = [
+    proposalId: bigint,
+    startTime: bigint,
+    duration: bigint
+  ];
   export interface OutputObject {
+    proposalId: bigint;
     startTime: bigint;
     duration: bigint;
   }
@@ -309,23 +471,57 @@ export interface Voting extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  addForAgainstOptions: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   addProposal: TypedContractMethod<
     [_name: string, _description: string, _ipfsHash: string],
     [void],
     "nonpayable"
   >;
 
-  authorizeVoter: TypedContractMethod<
-    [_voter: AddressLike],
+  addVotingOption: TypedContractMethod<
+    [_proposalId: BigNumberish, _optionName: string],
     [void],
     "nonpayable"
   >;
 
-  endVoting: TypedContractMethod<[], [void], "nonpayable">;
+  authorizeVoter: TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  endVoting: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   getProposal: TypedContractMethod<
     [_id: BigNumberish],
     [Voting.ProposalStructOutput],
+    "view"
+  >;
+
+  getProposalOption: TypedContractMethod<
+    [_proposalId: BigNumberish, _optionId: BigNumberish],
+    [Voting.VotingOptionStructOutput],
+    "view"
+  >;
+
+  getProposalOptions: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [Voting.VotingOptionStructOutput[]],
+    "view"
+  >;
+
+  getProposalResults: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [bigint[]],
     "view"
   >;
 
@@ -339,51 +535,121 @@ export interface Voting extends BaseContract {
 
   getResults: TypedContractMethod<[], [bigint[]], "view">;
 
+  getVoterChoice: TypedContractMethod<
+    [_voter: AddressLike],
+    [
+      [bigint, bigint, boolean] & {
+        proposalId: bigint;
+        optionId: bigint;
+        voted: boolean;
+      }
+    ],
+    "view"
+  >;
+
   hasVoted: TypedContractMethod<[_voter: AddressLike], [boolean], "view">;
 
-  isAuthorized: TypedContractMethod<[_voter: AddressLike], [boolean], "view">;
+  hasVotedOnProposal: TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [boolean],
+    "view"
+  >;
+
+  isAuthorizedForProposal: TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [boolean],
+    "view"
+  >;
+
+  isProposalVotingActive: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [boolean],
+    "view"
+  >;
 
   owner: TypedContractMethod<[], [string], "view">;
+
+  proposalOptions: TypedContractMethod<
+    [arg0: BigNumberish, arg1: BigNumberish],
+    [
+      [bigint, string, bigint] & { id: bigint; name: string; voteCount: bigint }
+    ],
+    "view"
+  >;
+
+  proposalVoted: TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [boolean],
+    "view"
+  >;
 
   proposals: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, string, bigint, string] & {
+      [
+        bigint,
+        string,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        bigint,
+        boolean
+      ] & {
         id: bigint;
         name: string;
         description: string;
-        voteCount: bigint;
         ipfsHash: string;
+        totalVotes: bigint;
+        optionsCount: bigint;
+        creator: string;
+        startTime: bigint;
+        duration: bigint;
+        votingActive: boolean;
       }
     ],
     "view"
   >;
 
-  startTime: TypedContractMethod<[], [bigint], "view">;
+  startVoting: TypedContractMethod<
+    [_proposalId: BigNumberish, _durationInMinutes: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
-  startVoting: TypedContractMethod<[], [void], "nonpayable">;
-
-  timeRemaining: TypedContractMethod<[], [bigint], "view">;
+  timeRemaining: TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   totalVotes: TypedContractMethod<[], [bigint], "view">;
 
-  vote: TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  vote: TypedContractMethod<
+    [_proposalId: BigNumberish, _optionId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
+  voterProposalAuthorization: TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [boolean],
+    "view"
+  >;
 
   voters: TypedContractMethod<
     [arg0: AddressLike],
     [
-      [boolean, boolean, bigint] & {
-        authorized: boolean;
+      [boolean, bigint, bigint] & {
         voted: boolean;
-        vote: bigint;
+        votedProposalId: bigint;
+        votedOptionId: bigint;
       }
     ],
     "view"
   >;
-
-  votingActive: TypedContractMethod<[], [boolean], "view">;
-
-  votingDuration: TypedContractMethod<[], [bigint], "view">;
 
   votingTitle: TypedContractMethod<[], [string], "view">;
 
@@ -392,6 +658,9 @@ export interface Voting extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "addForAgainstOptions"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "addProposal"
   ): TypedContractMethod<
     [_name: string, _description: string, _ipfsHash: string],
@@ -399,11 +668,22 @@ export interface Voting extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "addVotingOption"
+  ): TypedContractMethod<
+    [_proposalId: BigNumberish, _optionName: string],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "authorizeVoter"
-  ): TypedContractMethod<[_voter: AddressLike], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "endVoting"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "getProposal"
   ): TypedContractMethod<
@@ -411,6 +691,23 @@ export interface Voting extends BaseContract {
     [Voting.ProposalStructOutput],
     "view"
   >;
+  getFunction(
+    nameOrSignature: "getProposalOption"
+  ): TypedContractMethod<
+    [_proposalId: BigNumberish, _optionId: BigNumberish],
+    [Voting.VotingOptionStructOutput],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getProposalOptions"
+  ): TypedContractMethod<
+    [_proposalId: BigNumberish],
+    [Voting.VotingOptionStructOutput[]],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getProposalResults"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [bigint[]], "view">;
   getFunction(
     nameOrSignature: "getProposals"
   ): TypedContractMethod<[], [Voting.ProposalStructOutput[]], "view">;
@@ -421,63 +718,128 @@ export interface Voting extends BaseContract {
     nameOrSignature: "getResults"
   ): TypedContractMethod<[], [bigint[]], "view">;
   getFunction(
+    nameOrSignature: "getVoterChoice"
+  ): TypedContractMethod<
+    [_voter: AddressLike],
+    [
+      [bigint, bigint, boolean] & {
+        proposalId: bigint;
+        optionId: bigint;
+        voted: boolean;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
     nameOrSignature: "hasVoted"
   ): TypedContractMethod<[_voter: AddressLike], [boolean], "view">;
   getFunction(
-    nameOrSignature: "isAuthorized"
-  ): TypedContractMethod<[_voter: AddressLike], [boolean], "view">;
+    nameOrSignature: "hasVotedOnProposal"
+  ): TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "isAuthorizedForProposal"
+  ): TypedContractMethod<
+    [_voter: AddressLike, _proposalId: BigNumberish],
+    [boolean],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "isProposalVotingActive"
+  ): TypedContractMethod<[_proposalId: BigNumberish], [boolean], "view">;
   getFunction(
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "proposalOptions"
+  ): TypedContractMethod<
+    [arg0: BigNumberish, arg1: BigNumberish],
+    [
+      [bigint, string, bigint] & { id: bigint; name: string; voteCount: bigint }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "proposalVoted"
+  ): TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [boolean],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "proposals"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [bigint, string, string, bigint, string] & {
+      [
+        bigint,
+        string,
+        string,
+        string,
+        bigint,
+        bigint,
+        string,
+        bigint,
+        bigint,
+        boolean
+      ] & {
         id: bigint;
         name: string;
         description: string;
-        voteCount: bigint;
         ipfsHash: string;
+        totalVotes: bigint;
+        optionsCount: bigint;
+        creator: string;
+        startTime: bigint;
+        duration: bigint;
+        votingActive: boolean;
       }
     ],
     "view"
   >;
   getFunction(
-    nameOrSignature: "startTime"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "startVoting"
-  ): TypedContractMethod<[], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [_proposalId: BigNumberish, _durationInMinutes: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "timeRemaining"
-  ): TypedContractMethod<[], [bigint], "view">;
+  ): TypedContractMethod<[_proposalId: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "totalVotes"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "vote"
-  ): TypedContractMethod<[_proposalId: BigNumberish], [void], "nonpayable">;
+  ): TypedContractMethod<
+    [_proposalId: BigNumberish, _optionId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "voterProposalAuthorization"
+  ): TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [boolean],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "voters"
   ): TypedContractMethod<
     [arg0: AddressLike],
     [
-      [boolean, boolean, bigint] & {
-        authorized: boolean;
+      [boolean, bigint, bigint] & {
         voted: boolean;
-        vote: bigint;
+        votedProposalId: bigint;
+        votedOptionId: bigint;
       }
     ],
     "view"
   >;
-  getFunction(
-    nameOrSignature: "votingActive"
-  ): TypedContractMethod<[], [boolean], "view">;
-  getFunction(
-    nameOrSignature: "votingDuration"
-  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "votingTitle"
   ): TypedContractMethod<[], [string], "view">;
@@ -511,6 +873,13 @@ export interface Voting extends BaseContract {
     VotingEndedEvent.OutputObject
   >;
   getEvent(
+    key: "VotingOptionAdded"
+  ): TypedContractEvent<
+    VotingOptionAddedEvent.InputTuple,
+    VotingOptionAddedEvent.OutputTuple,
+    VotingOptionAddedEvent.OutputObject
+  >;
+  getEvent(
     key: "VotingStarted"
   ): TypedContractEvent<
     VotingStartedEvent.InputTuple,
@@ -530,7 +899,7 @@ export interface Voting extends BaseContract {
       ProposalAddedEvent.OutputObject
     >;
 
-    "VoteCast(address,uint256)": TypedContractEvent<
+    "VoteCast(address,uint256,uint256)": TypedContractEvent<
       VoteCastEvent.InputTuple,
       VoteCastEvent.OutputTuple,
       VoteCastEvent.OutputObject
@@ -541,7 +910,7 @@ export interface Voting extends BaseContract {
       VoteCastEvent.OutputObject
     >;
 
-    "VoterAuthorized(address)": TypedContractEvent<
+    "VoterAuthorized(address,uint256)": TypedContractEvent<
       VoterAuthorizedEvent.InputTuple,
       VoterAuthorizedEvent.OutputTuple,
       VoterAuthorizedEvent.OutputObject
@@ -552,7 +921,7 @@ export interface Voting extends BaseContract {
       VoterAuthorizedEvent.OutputObject
     >;
 
-    "VotingEnded(uint256,uint256)": TypedContractEvent<
+    "VotingEnded(uint256,uint256,uint256)": TypedContractEvent<
       VotingEndedEvent.InputTuple,
       VotingEndedEvent.OutputTuple,
       VotingEndedEvent.OutputObject
@@ -563,7 +932,18 @@ export interface Voting extends BaseContract {
       VotingEndedEvent.OutputObject
     >;
 
-    "VotingStarted(uint256,uint256)": TypedContractEvent<
+    "VotingOptionAdded(uint256,uint256,string)": TypedContractEvent<
+      VotingOptionAddedEvent.InputTuple,
+      VotingOptionAddedEvent.OutputTuple,
+      VotingOptionAddedEvent.OutputObject
+    >;
+    VotingOptionAdded: TypedContractEvent<
+      VotingOptionAddedEvent.InputTuple,
+      VotingOptionAddedEvent.OutputTuple,
+      VotingOptionAddedEvent.OutputObject
+    >;
+
+    "VotingStarted(uint256,uint256,uint256)": TypedContractEvent<
       VotingStartedEvent.InputTuple,
       VotingStartedEvent.OutputTuple,
       VotingStartedEvent.OutputObject

@@ -4,6 +4,5 @@ export const config = {
     name: "localhost",
     chainId: 1337
   },
-  votingTitle: "Community Election 2024",
-  votingDuration: 60
+  votingTitle: "Community Election 2024"
 };

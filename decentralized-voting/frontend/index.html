@@ -24,7 +24,7 @@
             <div class="status-bar">
                 <div class="account-info">Account: <span id="accountAddress"></span></div>
                 <div id="votingStatus" class="voting-status inactive">Voting Inactive</div>
-                <div class="timer">Time remaining: <span id="timeRemaining">00:00:00</span></div>
+                <div class="timer">Active Proposals: <span id="activeProposalsCount">0</span></div>
             </div>
             
             <div class="card">
@@ -48,42 +48,139 @@
             
             <div class="card">
                 <h2 class="card-title">Live Results</h2>
-                <div class="results-container">
+                <div class="results-selector">
+                    <label for="proposalResultsSelect">Select Proposal:</label>
+                    <select id="proposalResultsSelect">
+                        <option value="">-- Select a proposal --</option>
+                    </select>
+                </div>
+                <div class="results-container" id="resultsContainer" style="display: none;">
+                    <div class="proposal-result-header">
+                        <h3 id="selectedProposalTitle">Proposal Results</h3>
+                        <p id="selectedProposalDescription" class="proposal-desc-result"></p>
+                    </div>
                     <div class="chart-section">
                         <h3>Vote Distribution</h3>
                         <div class="chart-container">
                             <canvas id="resultsChart"></canvas>
                         </div>
                     </div>
-                    <div class="table-section">
-                        <h3>Detailed Results</h3>
-                        <div id="resultsTable" class="results-table"></div>
-                    </div>
                 </div>
             </div>
             
-            <div id="adminPanel" class="card admin-panel">
-                <h2 class="card-title">Admin Panel</h2>
-                <div class="admin-controls">
-                    <div class="form-group">
-                        <label for="proposalName">Proposal Name</label>
-                        <input type="text" id="proposalName" placeholder="Enter proposal name">
-                    </div>
-                    <div class="form-group">
-                        <label for="proposalDescription">Proposal Description</label>
-                        <textarea id="proposalDescription" placeholder="Enter proposal description"></textarea>
-                    </div>
-                    <button id="addProposal" class="admin-btn">Add Proposal</button>
+            <div id="adminPanel" class="card admin-panel admin-panel-collapsed">
+                <div class="admin-panel-header">
+                    <h2 class="card-title">🔑 Admin Control Panel</h2>
+                    <button id="adminToggle" class="admin-toggle-btn" aria-expanded="false">
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                </div>
+                <div id="adminControls" class="admin-controls">
                     
-                    <div class="form-group">
-                        <label for="voterAddress">Authorize Voter</label>
-                        <input type="text" id="voterAddress" placeholder="0x...">
+                    <!-- Proposal Management Section -->
+                    <div class="admin-section">
+                        <div class="section-header">
+                            <h3>📋 Manage Proposals</h3>
+                        </div>
+                        <div class="admin-section-content">
+                            <div class="form-group">
+                                <label for="proposalName">Proposal Name *</label>
+                                <input type="text" id="proposalName" placeholder="Enter proposal name">
+                            </div>
+                            <div class="form-group">
+                                <label for="proposalDescription">Proposal Description</label>
+                                <textarea id="proposalDescription" placeholder="Enter proposal description"></textarea>
+                            </div>
+                            <button id="addProposal" class="admin-btn primary">➕ Add Proposal</button>
+                        </div>
                     </div>
-                    <button id="authorizeVoter" class="admin-btn">Authorize Voter</button>
                     
-                    <div class="button-group">
-                        <button id="startVoting" class="admin-btn primary">Start Voting</button>
-                        <button id="endVoting" class="admin-btn danger">End Voting</button>
+                    <!-- Voting Options Section -->
+                    <div class="admin-section">
+                        <div class="section-header">
+                            <h3>🎯 Add Voting Options</h3>
+                        </div>
+                        <div class="admin-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="optionProposalSelect">Select Your Proposal *</label>
+                                    <select id="optionProposalSelect">
+                                        <option value="">-- Select a proposal --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="optionName">Option Name *</label>
+                                    <input type="text" id="optionName" placeholder="e.g., Option A">
+                                </div>
+                            </div>
+                            <button id="addVotingOption" class="admin-btn secondary">➕ Add Custom Option</button>
+                            
+                            <div class="divider-small"></div>
+                            
+                            <div class="form-group">
+                                <label for="forAgainstProposalSelect">Select Your Proposal (For/Against) *</label>
+                                <select id="forAgainstProposalSelect">
+                                    <option value="">-- Select a proposal --</option>
+                                </select>
+                            </div>
+                            <button id="addForAgainst" class="admin-btn secondary">➕ Add For/Against</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Voter Authorization Section -->
+                    <div class="admin-section">
+                        <div class="section-header">
+                            <h3>👥 Authorize Voters</h3>
+                        </div>
+                        <div class="admin-section-content">
+                            <div class="form-group">
+                                <label for="voterAddress">Voter Address *</label>
+                                <input type="text" id="voterAddress" placeholder="0x...">
+                            </div>
+                            <div class="form-group">
+                                <label for="authProposalSelect">Select Your Proposal *</label>
+                                <select id="authProposalSelect">
+                                    <option value="">-- Select a proposal --</option>
+                                </select>
+                            </div>
+                            <button id="authorizeVoter" class="admin-btn secondary">✅ Authorize for Proposal</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Voting Control Section -->
+                    <div class="admin-section">
+                        <div class="section-header">
+                            <h3>⏱️ Voting Control</h3>
+                        </div>
+                        <div class="admin-section-content">
+                            <!-- Start Voting -->
+                            <p class="control-hint">Start a voting session for one of your proposals with a custom duration.</p>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="startProposalSelect">Your Proposal *</label>
+                                    <select id="startProposalSelect">
+                                        <option value="">-- Select a proposal --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="startDuration">Duration (minutes) *</label>
+                                    <input type="number" id="startDuration" placeholder="e.g., 60" min="1" value="60">
+                                </div>
+                            </div>
+                            <button id="startVoting" class="admin-btn success">▶️ Start Voting for Proposal</button>
+
+                            <div class="divider-small"></div>
+
+                            <!-- End Voting -->
+                            <p class="control-hint">End a completed voting session for one of your proposals.</p>
+                            <div class="form-group">
+                                <label for="endProposalSelect">Your Proposal *</label>
+                                <select id="endProposalSelect">
+                                    <option value="">-- Select a proposal --</option>
+                                </select>
+                            </div>
+                            <button id="endVoting" class="admin-btn danger">⏹️ End Voting for Proposal</button>
+                        </div>
                     </div>
                 </div>
             </div>

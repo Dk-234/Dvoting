@@ -17,20 +17,41 @@ async function main() {
   console.log("📱 Deploying contracts with account:", deployer.address);
   console.log("💰 Account balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "ETH\n");
 
-  // Deploy the contract
+  // Deploy the contract (duration is now per-proposal, not global)
   console.log("📝 Deploying Voting contract...");
   const Voting = await ethers.getContractFactory("Voting");
   
-  // Set voting to last 60 minutes (1 hour)
-  const votingDuration = 60; // minutes
-  const voting = await Voting.deploy("Community Election 2024", votingDuration);
+  const voting = await Voting.deploy("Community Election 2024");
   
   await voting.waitForDeployment();
   const contractAddress = await voting.getAddress();
   
   console.log("✅ Voting contract deployed to:", contractAddress);
   console.log("📋 Voting title:", await voting.votingTitle());
-  console.log("⏱️ Voting duration:", votingDuration, "minutes\n");
+  console.log("⏱️ Voting duration: per-proposal (set when starting each proposal's vote)\n");
+  
+  // Add sample proposals with voting options
+  console.log("📝 Adding sample proposals with voting options...");
+  
+  // Proposal 1: Budget Allocation with For/Against
+  await voting.addProposal(
+    "Budget Allocation 2024",
+    "Approve the proposed budget allocation for Q1 2024",
+    ""
+  );
+  await voting.addForAgainstOptions(0);
+  console.log("✅ Added Proposal 1 with For/Against options");
+  
+  // Proposal 2: Project Direction with multiple choices
+  await voting.addProposal(
+    "Project Direction",
+    "Choose the primary focus for the next quarter",
+    ""
+  );
+  await voting.addVotingOption(1, "Marketing Campaign");
+  await voting.addVotingOption(1, "Product Development");
+  await voting.addVotingOption(1, "Community Building");
+  console.log("✅ Added Proposal 2 with 3 options\n");
 
   // Create frontend directory if it doesn't exist
   const frontendDir = join(__dirname, "../frontend");
@@ -68,8 +89,7 @@ async function main() {
     name: "localhost",
     chainId: 1337
   },
-  votingTitle: "Community Election 2024",
-  votingDuration: ${votingDuration}
+  votingTitle: "Community Election 2024"
 };\n`
   );
   console.log("⚙️ Configuration saved to:", configFile);
