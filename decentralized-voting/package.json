@@ -21,7 +21,7 @@
     "chai": "^4.3.10",
     "concurrently": "^9.2.1",
     "ethers": "^6.16.0",
-    "hardhat": "^2.19.0",
+    "hardhat": "^2.22.0",
     "hardhat-gas-reporter": "^1.0.8",
     "solidity-coverage": "^0.8.0",
     "typechain": "^8.3.0"

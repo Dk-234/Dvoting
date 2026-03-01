@@ -2,4 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export { Counter__factory } from "./Counter__factory";
+export { EnhancedIdentity__factory } from "./EnhancedIdentity__factory";
 export { Voting__factory } from "./Voting__factory";

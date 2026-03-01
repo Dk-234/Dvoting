@@ -851,3 +851,312 @@ input[type="file"] {
     align-items: center;
     gap: 15px;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Verified Dashboard
+   ═══════════════════════════════════════════════════════ */
+
+.verified-dashboard {
+    margin-top: 20px;
+}
+
+.dashboard-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 2px solid #22c55e;
+}
+
+.dashboard-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #bbf7d0;
+}
+
+.dashboard-icon {
+    font-size: 3rem;
+    line-height: 1;
+}
+
+.dashboard-title-group h2 {
+    margin: 0;
+    color: #166534;
+    font-size: 1.5rem;
+}
+
+.dashboard-subtitle {
+    margin: 4px 0 0;
+    color: #15803d;
+    font-size: 0.95rem;
+}
+
+.dashboard-details {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.dashboard-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.7);
+    border-radius: 8px;
+}
+
+.dashboard-label {
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.95rem;
+}
+
+.dashboard-value {
+    color: #111827;
+    font-weight: 500;
+}
+
+.dashboard-factor-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.factor-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 2px solid #d1d5db;
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.factor-badge.badge-ok {
+    border-color: #22c55e;
+    background: #dcfce7;
+    color: #166534;
+}
+
+.factor-badge.badge-missing {
+    border-color: #fbbf24;
+    background: #fef9c3;
+    color: #92400e;
+}
+
+.dashboard-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dashboard-actions .primary-btn {
+    text-decoration: none;
+    text-align: center;
+    flex: 1;
+    min-width: 200px;
+}
+
+.dashboard-actions .secondary-btn {
+    flex: 0;
+    white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Step 3: Device Registration Card
+   ═══════════════════════════════════════════════════════ */
+
+.device-card {
+    border-left: 4px solid var(--info);
+}
+
+.device-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--light);
+    border-radius: 10px;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+.device-status .status-icon {
+    font-size: 1.4rem;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Step 4: Face Verification Card
+   ═══════════════════════════════════════════════════════ */
+
+.face-card {
+    border-left: 4px solid #9b59b6;
+}
+
+.face-capture-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.video-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #111;
+    aspect-ratio: 4/3;
+}
+
+.video-wrapper video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);          /* mirror */
+}
+
+.face-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+}
+
+.face-guide {
+    width: 55%;
+    height: 70%;
+    border: 3px dashed rgba(255, 255, 255, 0.55);
+    border-radius: 50%;
+    animation: pulse-guide 2s ease-in-out infinite;
+}
+
+@keyframes pulse-guide {
+    0%, 100% { border-color: rgba(255, 255, 255, 0.55); }
+    50%      { border-color: rgba(255, 255, 255, 0.25); }
+}
+
+.face-instructions {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.face-progress {
+    width: 100%;
+    max-width: 480px;
+    height: 6px;
+    background: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.face-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #9b59b6, #8e44ad);
+    border-radius: 3px;
+    transition: width 0.35s ease;
+}
+
+.face-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Step 5: Combined Verification Card
+   ═══════════════════════════════════════════════════════ */
+
+.combined-card {
+    border-left: 4px solid var(--success);
+}
+
+.factors-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.factor-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--light);
+    border-radius: 10px;
+}
+
+.factor-icon {
+    font-size: 1.3rem;
+}
+
+.factor-label {
+    flex: 1;
+    font-weight: 500;
+    color: var(--primary);
+}
+
+.factor-status {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.factor-status.factor-ok {
+    color: var(--success);
+}
+
+.factor-status.factor-pending {
+    color: var(--danger);
+}
+
+.combined-hash-display {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+.combined-hash-display .result-label {
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.combined-hash-display .result-value {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+/* ── Warning banner variant ────────────────────────── */
+
+.verification-banner.warning {
+    background: #fef3cd;
+    border: 1px solid #ffc107;
+}
+
+.verification-banner.warning .banner-text h3 {
+    color: #856404;
+}
+
+.verification-banner.warning .banner-text p {
+    color: #856404;
+}

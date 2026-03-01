@@ -50,7 +50,86 @@
             </div>
         </div>
 
-        <div class="main-content">
+        <!-- Verified Dashboard (shown when already verified on-chain) -->
+        <div class="verified-dashboard hidden" id="verifiedDashboard">
+            <!-- Device Authentication Gate (shown first for returning users) -->
+            <div class="card dashboard-card" id="deviceAuthGate">
+                <div class="dashboard-header">
+                    <div class="dashboard-icon">📱</div>
+                    <div class="dashboard-title-group">
+                        <h2>Welcome Back!</h2>
+                        <p class="dashboard-subtitle">Verify your device to access your identity dashboard</p>
+                    </div>
+                </div>
+                <p class="info-text" style="margin: 15px 0; text-align: center;">
+                    Your identity is registered on the blockchain. Please authenticate with your
+                    registered device (fingerprint, face scan, or PIN) to confirm it's you.
+                </p>
+                <div style="text-align: center; margin: 20px 0;">
+                    <button id="deviceAuthBtn" class="primary-btn">📱 Authenticate Device</button>
+                </div>
+                <div id="deviceAuthResult" class="verification-banner hidden" style="margin-top: 15px;">
+                    <div class="banner-icon" id="deviceAuthResultIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="deviceAuthResultTitle">Authenticating...</h3>
+                        <p id="deviceAuthResultSubtitle">Follow device prompts</p>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <button id="skipDeviceAuthBtn" class="secondary-btn" style="font-size: 0.85rem;">
+                        Skip — show dashboard without device check
+                    </button>
+                </div>
+            </div>
+
+            <!-- Full Dashboard (revealed after device auth or skip) -->
+            <div class="card dashboard-card hidden" id="dashboardContent">
+                <div class="dashboard-header">
+                    <div class="dashboard-icon">🛡️</div>
+                    <div class="dashboard-title-group">
+                        <h2>Identity Verified</h2>
+                        <p class="dashboard-subtitle">Your multi-factor identity is registered on the blockchain</p>
+                    </div>
+                </div>
+
+                <div class="dashboard-details">
+                    <div class="dashboard-row">
+                        <span class="dashboard-label">👤 Name</span>
+                        <span class="dashboard-value" id="dashName">—</span>
+                    </div>
+                    <div class="dashboard-row">
+                        <span class="dashboard-label">🪪 ID Type</span>
+                        <span class="dashboard-value" id="dashIdType">—</span>
+                    </div>
+                    <div class="dashboard-row">
+                        <span class="dashboard-label">📅 Verified On</span>
+                        <span class="dashboard-value" id="dashVerifiedAt">—</span>
+                    </div>
+                    <div class="dashboard-row" id="dashFactorsRow" style="display:none;">
+                        <span class="dashboard-label">🔐 Factors Verified</span>
+                        <span class="dashboard-value" id="dashFactors">—</span>
+                    </div>
+                    <div class="dashboard-row" id="dashEnhancedRow" style="display:none;">
+                        <span class="dashboard-label">⛓️ Enhanced Identity</span>
+                        <span class="dashboard-value" id="dashEnhanced">—</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-factor-badges" id="dashFactorBadges" style="display:none;">
+                    <span class="factor-badge" id="dashBadgeOcr">📄 OCR</span>
+                    <span class="factor-badge" id="dashBadgeDevice">📱 Device</span>
+                    <span class="factor-badge" id="dashBadgeFace">🤳 Face</span>
+                    <span class="factor-badge" id="dashBadgeLiveness">🧬 Liveness</span>
+                </div>
+
+                <div class="dashboard-actions">
+                    <a href="/" class="primary-btn">🗳️ Go to Voting Portal</a>
+                    <button id="reverifyBtn" class="secondary-btn">🔄 Re-verify Identity</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content" id="mainContent">
             <!-- Step 1: Enter Details -->
             <div class="card details-card">
                 <h2>📝 Step 1: Enter Your Details</h2>
@@ -224,24 +303,12 @@
                 </div>
 
                 <div class="action-buttons">
-                    <button id="registerBlockchainBtn" class="secondary-btn hidden">
-                        ⛓️ Register Identity on Blockchain
-                    </button>
                     <button id="downloadDataBtn" class="secondary-btn">
                         📥 Download Verification Data
                     </button>
                     <button id="resetBtn" class="secondary-btn">
                         🔄 New Verification
                     </button>
-                </div>
-
-                <!-- Blockchain Registration Status -->
-                <div id="blockchainRegStatus" class="verification-banner hidden" style="margin-top: 15px;">
-                    <div class="banner-icon" id="regStatusIcon">⏳</div>
-                    <div class="banner-text">
-                        <h3 id="regStatusTitle">Registering...</h3>
-                        <p id="regStatusSubtitle">Submitting your verification to the blockchain</p>
-                    </div>
                 </div>
 
                 <details class="ocr-debug" style="margin-top: 20px;">
@@ -258,12 +325,148 @@
                     <li><strong>Enter your details</strong> — Fill in your ID type, ID number, name, and date of birth exactly as on your ID</li>
                     <li><strong>Upload your ID photo</strong> — Take a clear photo of your government-issued ID</li>
                     <li><strong>Cross-verification</strong> — The system extracts text from the ID image using OCR and compares it with the details you entered</li>
-                    <li><strong>Blockchain registration</strong> — If verified, register a secure hash on the blockchain to prove your identity</li>
-                    <li><strong>Get authorized</strong> — Proposal creators can now see your verified status and authorize you to vote</li>
+                    <li><strong>Face verification</strong> — Take a live selfie video for liveness detection and facial verification</li>
+                    <li><strong>Register your device</strong> — Bind your identity to this device using WebAuthn (biometric/PIN)</li>
+                    <li><strong>Blockchain registration</strong> — Register a combined multi-factor proof hash on the blockchain</li>
+                    <li><strong>Get authorized</strong> — Proposal creators can see your verified status and authorize you to vote</li>
                 </ol>
                 <div class="warning">
                     ⚠️ Your actual ID number is NEVER stored. Only a secure hash is saved on the blockchain.
+                    <br>⚠️ Your face data stays on YOUR device — only a hash is sent to the backend.
                     <br>⚠️ Each ID can only be registered with ONE wallet address to prevent duplicate voting.
+                </div>
+            </div>
+
+            <!-- Step 3: Face Verification & Liveness -->
+            <div class="card face-card hidden" id="faceCard">
+                <h2>🤳 Step 3: Face Verification</h2>
+                <p class="info-text">
+                    We need to verify you are a real person. Look at the camera and follow
+                    the instructions. Move your head slightly and blink naturally.
+                    Your face data stays on your device — only a hash is sent.
+                </p>
+
+                <div class="face-capture-container" id="faceCaptureContainer">
+                    <div class="video-wrapper" id="videoWrapper">
+                        <video id="faceVideo" autoplay playsinline muted></video>
+                        <div class="face-overlay" id="faceOverlay">
+                            <div class="face-guide"></div>
+                        </div>
+                        <div class="face-instructions" id="faceInstructions">
+                            Position your face in the oval
+                        </div>
+                    </div>
+
+                    <div class="face-progress" id="faceProgress">
+                        <div class="face-progress-bar" id="faceProgressBar"></div>
+                    </div>
+
+                    <div class="face-actions">
+                        <button id="startFaceCaptureBtn" class="primary-btn">
+                            📷 Start Face Capture
+                        </button>
+                        <button id="retryFaceCaptureBtn" class="secondary-btn hidden">
+                            🔄 Retry Capture
+                        </button>
+                    </div>
+                </div>
+
+                <div id="faceResult" class="verification-banner hidden" style="margin-top: 15px;">
+                    <div class="banner-icon" id="faceResultIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="faceResultTitle">Processing...</h3>
+                        <p id="faceResultSubtitle">Analyzing face capture</p>
+                    </div>
+                </div>
+
+                <!-- Face Match: ID card vs Live camera -->
+                <div id="faceMatchResult" class="verification-banner hidden" style="margin-top: 10px;">
+                    <div class="banner-icon" id="faceMatchIcon">🔍</div>
+                    <div class="banner-text">
+                        <h3 id="faceMatchTitle">Comparing faces...</h3>
+                        <p id="faceMatchSubtitle">Matching ID card photo with live capture</p>
+                    </div>
+                </div>
+
+                <div id="livenessResult" class="verification-banner hidden" style="margin-top: 10px;">
+                    <div class="banner-icon" id="livenessResultIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="livenessResultTitle">Liveness Check...</h3>
+                        <p id="livenessResultSubtitle">Verifying you are a real person</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Device Registration (WebAuthn) -->
+            <div class="card device-card hidden" id="deviceCard">
+                <h2>📱 Step 4: Register Your Device</h2>
+                <p class="info-text">
+                    Bind your identity to this device using WebAuthn. This creates a
+                    cryptographic key pair that proves you are using this specific device.
+                    You may be prompted for a fingerprint, face scan, or PIN.
+                </p>
+                <div class="device-status" id="deviceStatus">
+                    <div class="status-icon">🔒</div>
+                    <span>Device not registered</span>
+                </div>
+                <button id="registerDeviceBtn" class="primary-btn">
+                    📱 Register This Device
+                </button>
+                <div id="deviceResult" class="verification-banner hidden" style="margin-top: 15px;">
+                    <div class="banner-icon" id="deviceResultIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="deviceResultTitle">Registering...</h3>
+                        <p id="deviceResultSubtitle">Please follow the device prompts</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Combined Verification & Blockchain Registration -->
+            <div class="card combined-card hidden" id="combinedCard">
+                <h2>⛓️ Step 5: Complete Verification</h2>
+                <p class="info-text">
+                    All verification factors have been collected. Review the status below
+                    and register your combined identity proof on the blockchain.
+                </p>
+
+                <div class="factors-summary" id="factorsSummary">
+                    <div class="factor-row" id="factorOcr">
+                        <span class="factor-icon">📄</span>
+                        <span class="factor-label">Document OCR</span>
+                        <span class="factor-status" id="factorOcrStatus">Pending</span>
+                    </div>
+                    <div class="factor-row" id="factorDevice">
+                        <span class="factor-icon">📱</span>
+                        <span class="factor-label">Device Binding</span>
+                        <span class="factor-status" id="factorDeviceStatus">Pending</span>
+                    </div>
+                    <div class="factor-row" id="factorFace">
+                        <span class="factor-icon">🤳</span>
+                        <span class="factor-label">Face Verification</span>
+                        <span class="factor-status" id="factorFaceStatus">Pending</span>
+                    </div>
+                    <div class="factor-row" id="factorLiveness">
+                        <span class="factor-icon">🧬</span>
+                        <span class="factor-label">Liveness Detection</span>
+                        <span class="factor-status" id="factorLivenessStatus">Pending</span>
+                    </div>
+                </div>
+
+                <div class="combined-hash-display hidden" id="combinedHashDisplay">
+                    <div class="result-label">Combined Identity Hash:</div>
+                    <div class="result-value hash-value" id="combinedHashValue">-</div>
+                </div>
+
+                <button id="completeVerificationBtn" class="primary-btn" style="margin-top: 15px;">
+                    🔗 Complete & Register on Blockchain
+                </button>
+
+                <div id="combinedRegStatus" class="verification-banner hidden" style="margin-top: 15px;">
+                    <div class="banner-icon" id="combinedRegIcon">⏳</div>
+                    <div class="banner-text">
+                        <h3 id="combinedRegTitle">Processing...</h3>
+                        <p id="combinedRegSubtitle">Please wait</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -279,9 +482,20 @@
     <!-- Load Ethers.js library -->
     <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
     
+    <!-- Load face-api.js for face detection / recognition -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
     <!-- Load contract config (auto-generated by deploy script) -->
     <script src="contractAddress.js"></script>
     <script src="contractABI.js"></script>
+
+    <!-- Load enhanced identity contract config -->
+    <script src="enhancedIdentityAddress.js"></script>
+    <script src="enhancedIdentityABI.js"></script>
+
+    <!-- Load verification modules (non-module scripts for compatibility) -->
+    <script src="js/webauthn-device.js"></script>
+    <script src="js/face-verification.js"></script>
 
     <script src="app.js"></script>
 </body>

@@ -18,6 +18,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Counter__factory>;
     getContractFactory(
+      name: "EnhancedIdentity",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.EnhancedIdentity__factory>;
+    getContractFactory(
       name: "Voting",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Voting__factory>;
@@ -28,6 +32,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Counter>;
     getContractAt(
+      name: "EnhancedIdentity",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.EnhancedIdentity>;
+    getContractAt(
       name: "Voting",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -38,6 +47,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Counter>;
     deployContract(
+      name: "EnhancedIdentity",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.EnhancedIdentity>;
+    deployContract(
       name: "Voting",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Voting>;
@@ -47,6 +60,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Counter>;
+    deployContract(
+      name: "EnhancedIdentity",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.EnhancedIdentity>;
     deployContract(
       name: "Voting",
       args: any[],

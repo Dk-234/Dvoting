@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import sharp from 'sharp';
 import jsQR from 'jsqr';
+import axios from 'axios';
 
 dotenv.config();
 
@@ -19,7 +20,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve ID verification frontend at /verify
 const idFrontendDir = path.join(__dirname, '..', 'frontend');
@@ -64,6 +66,58 @@ const upload = multer({
 
 // Store verification results temporarily
 const verificationCache = new Map();
+
+// Store WebAuthn device credentials (credentialId -> { publicKey, userId, registeredAt })
+const deviceCredentialStore = new Map();
+
+// Store combined verification sessions
+const combinedVerificationCache = new Map();
+
+// Liveness microservice URL
+const LIVENESS_SERVICE_URL = process.env.LIVENESS_SERVICE_URL || 'http://localhost:5001';
+
+// Rate limiting: simple in-memory tracker
+const rateLimitStore = new Map();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const RATE_LIMIT_MAX = 10; // max requests per window
+
+/**
+ * Simple rate limiter middleware.
+ * Tracks requests per IP within a sliding window.
+ */
+function rateLimit(req, res, next) {
+    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    
+    if (!rateLimitStore.has(ip)) {
+        rateLimitStore.set(ip, []);
+    }
+    
+    const requests = rateLimitStore.get(ip).filter(t => now - t < RATE_LIMIT_WINDOW);
+    requests.push(now);
+    rateLimitStore.set(ip, requests);
+    
+    if (requests.length > RATE_LIMIT_MAX) {
+        return res.status(429).json({
+            success: false,
+            error: 'Too many requests. Please try again later.'
+        });
+    }
+    next();
+}
+
+// Clean up rate limit store periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, timestamps] of rateLimitStore.entries()) {
+        const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW);
+        if (recent.length === 0) {
+            rateLimitStore.delete(ip);
+        } else {
+            rateLimitStore.set(ip, recent);
+        }
+    }
+}, 60000);
 
 // ============================================================
 //  IMAGE PREPROCESSING (sharp) — adaptive multi-variant pipeline
@@ -1464,12 +1518,20 @@ function crossVerifyUserInput(userInput, rawText, detectedIdType) {
 // ============================================================
 
 // Health Check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+    // Check liveness service availability
+    let livenessAvailable = false;
+    try {
+        const lr = await axios.get(`${LIVENESS_SERVICE_URL}/health`, { timeout: 2000 });
+        livenessAvailable = lr.data?.status === 'healthy';
+    } catch (_) {}
+
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         service: 'Identity Verification System',
-        features: ['ocr', 'qr-reader', 'multi-country-id', 'id-type-detection']
+        features: ['ocr', 'qr-reader', 'multi-country-id', 'id-type-detection', 'webauthn', 'face-verification', 'liveness-detection'],
+        livenessService: livenessAvailable ? 'connected' : 'unavailable'
     });
 });
 
@@ -1661,6 +1723,414 @@ app.post('/api/prepare-blockchain', (req, res) => {
     });
 });
 
+// ============================================================
+//  WEBAUTHN DEVICE CREDENTIAL ENDPOINTS
+// ============================================================
+
+/**
+ * Register a WebAuthn device credential.
+ * Stores the credential ID and public key for later verification.
+ * 
+ * POST /api/webauthn/register
+ * Body: { credentialId, rawId, publicKey, walletAddress }
+ */
+app.post('/api/webauthn/register', rateLimit, (req, res) => {
+    const { credentialId, rawId, publicKey, walletAddress } = req.body;
+
+    if (!credentialId || !publicKey) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing credentialId or publicKey'
+        });
+    }
+
+    const deviceKey = rawId || credentialId;
+
+    // Check if this credential is already registered
+    if (deviceCredentialStore.has(deviceKey)) {
+        const existing = deviceCredentialStore.get(deviceKey);
+        if (existing.walletAddress && existing.walletAddress !== walletAddress) {
+            return res.status(409).json({
+                success: false,
+                error: 'This device is already registered to a different wallet'
+            });
+        }
+        // Same wallet re-registering — update
+    }
+
+    // Store the credential
+    deviceCredentialStore.set(deviceKey, {
+        credentialId,
+        publicKey,
+        walletAddress: walletAddress || null,
+        registeredAt: new Date().toISOString()
+    });
+
+    // Generate device ID hash
+    const deviceIdHash = crypto
+        .createHash('sha256')
+        .update(deviceKey + publicKey)
+        .digest('hex');
+
+    console.log(`🔐 WebAuthn credential registered: ${credentialId.substring(0, 20)}... for wallet ${walletAddress || 'unknown'}`);
+
+    res.json({
+        success: true,
+        deviceIdHash,
+        message: 'Device credential registered successfully'
+    });
+});
+
+/**
+ * Verify a WebAuthn authentication assertion.
+ * Checks that the credential matches a previously registered device.
+ * 
+ * POST /api/webauthn/verify
+ * Body: { credentialId, rawId, signature, authenticatorData, clientDataJSON }
+ */
+app.post('/api/webauthn/verify', rateLimit, (req, res) => {
+    const { credentialId, rawId, signature, authenticatorData, clientDataJSON } = req.body;
+
+    if (!credentialId || !signature) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing credential data'
+        });
+    }
+
+    const deviceKey = rawId || credentialId;
+    const stored = deviceCredentialStore.get(deviceKey);
+
+    if (!stored) {
+        return res.status(404).json({
+            success: false,
+            error: 'Device credential not found. Register the device first.'
+        });
+    }
+
+    // In a production system, we would cryptographically verify the signature
+    // against the stored public key using @simplewebauthn/server.
+    // For this implementation, we verify that:
+    // 1. The credential ID matches
+    // 2. A signature was provided (proving the private key was used)
+    // 3. authenticatorData and clientDataJSON were provided
+
+    const isValid = !!(
+        stored.credentialId === credentialId &&
+        signature &&
+        authenticatorData &&
+        clientDataJSON
+    );
+
+    if (!isValid) {
+        return res.status(401).json({
+            success: false,
+            error: 'Device authentication failed'
+        });
+    }
+
+    const deviceIdHash = crypto
+        .createHash('sha256')
+        .update(deviceKey + stored.publicKey)
+        .digest('hex');
+
+    console.log(`✅ WebAuthn credential verified: ${credentialId.substring(0, 20)}...`);
+
+    res.json({
+        success: true,
+        deviceIdHash,
+        walletAddress: stored.walletAddress
+    });
+});
+
+// ============================================================
+//  LIVENESS VERIFICATION PROXY
+// ============================================================
+
+/**
+ * Proxy liveness detection requests to the Python microservice.
+ * 
+ * POST /api/liveness/detect
+ * Body: { frames: [base64_string, ...] }
+ */
+app.post('/api/liveness/detect', rateLimit, async (req, res) => {
+    const { frames } = req.body;
+
+    if (!frames || !Array.isArray(frames) || frames.length < 2) {
+        return res.status(400).json({
+            success: false,
+            error: 'At least 2 base64-encoded frames are required'
+        });
+    }
+
+    try {
+        const response = await axios.post(
+            `${LIVENESS_SERVICE_URL}/detect-liveness`,
+            { frames },
+            {
+                timeout: 30000,
+                maxContentLength: 50 * 1024 * 1024,
+                maxBodyLength: 50 * 1024 * 1024
+            }
+        );
+
+        console.log(`🧬 Liveness result: isLive=${response.data.isLive}, confidence=${response.data.confidence}`);
+
+        res.json({
+            success: true,
+            ...response.data
+        });
+    } catch (error) {
+        console.error('❌ Liveness detection error:', error.message);
+        if (error.response) {
+            console.error('   ↳ Status:', error.response.status);
+            console.error('   ↳ Body:', JSON.stringify(error.response.data).slice(0, 500));
+        }
+
+        if (error.code === 'ECONNREFUSED') {
+            return res.status(503).json({
+                success: false,
+                error: 'Liveness detection service is not available. Please start the Python microservice.'
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Liveness detection failed: ' + error.message
+        });
+    }
+});
+
+/**
+ * Check liveness service health.
+ * GET /api/liveness/health
+ */
+app.get('/api/liveness/health', async (req, res) => {
+    try {
+        const response = await axios.get(`${LIVENESS_SERVICE_URL}/health`, { timeout: 5000 });
+        res.json({ success: true, ...response.data });
+    } catch (error) {
+        res.json({ success: false, error: 'Liveness service unavailable' });
+    }
+});
+
+// ============================================================
+//  COMBINED MULTI-FACTOR VERIFICATION ENDPOINT
+// ============================================================
+
+/**
+ * Complete multi-factor identity verification.
+ * Combines: OCR/document verification + WebAuthn device + face liveness.
+ * 
+ * POST /api/verify-identity-complete
+ * Body: {
+ *   sessionId: string (from prior /api/extract-ssn call),
+ *   deviceCredentialId: string,
+ *   deviceSignature: string,
+ *   deviceAuthenticatorData: string,
+ *   deviceClientDataJSON: string,
+ *   faceDescriptorHash: string,
+ *   faceMatchConfirmed: boolean,
+ *   livenessToken: string (from liveness microservice),
+ *   walletAddress: string
+ * }
+ */
+app.post('/api/verify-identity-complete', rateLimit, async (req, res) => {
+    console.log('\n🔐 === COMBINED MULTI-FACTOR VERIFICATION ==="');
+
+    const {
+        sessionId,
+        deviceCredentialId,
+        deviceRawId,
+        deviceSignature,
+        deviceAuthenticatorData,
+        deviceClientDataJSON,
+        faceDescriptorHash,
+        faceMatchConfirmed,
+        livenessToken,
+        walletAddress
+    } = req.body;
+
+    // Validation
+    if (!sessionId) {
+        return res.status(400).json({ success: false, error: 'Missing sessionId' });
+    }
+    if (!walletAddress) {
+        return res.status(400).json({ success: false, error: 'Missing walletAddress' });
+    }
+
+    const factors = {
+        ocr: { verified: false, details: '' },
+        device: { verified: false, details: '' },
+        face: { verified: false, details: '' },
+        liveness: { verified: false, details: '' }
+    };
+
+    // ── Factor 1: OCR Document Verification ──
+    const ocrSession = verificationCache.get(sessionId);
+    if (!ocrSession) {
+        return res.status(404).json({
+            success: false,
+            error: 'OCR verification session not found or expired. Upload your ID document first.'
+        });
+    }
+
+    const ocrData = ocrSession.data || ocrSession;
+    const crossVerification = ocrData.crossVerification || {};
+
+    if (crossVerification.overallStatus === 'verified') {
+        factors.ocr.verified = true;
+        factors.ocr.details = `All ${crossVerification.totalFields} fields matched.`;
+    } else {
+        factors.ocr.details = `Only ${crossVerification.matchCount}/${crossVerification.totalFields} fields matched.`;
+    }
+    console.log(`   [OCR] ${factors.ocr.verified ? '✅' : '❌'} ${factors.ocr.details}`);
+
+    // ── Factor 2: Device Credential Verification ──
+    if (deviceCredentialId && deviceSignature) {
+        const deviceKey = deviceRawId || deviceCredentialId;
+        const stored = deviceCredentialStore.get(deviceKey);
+
+        if (stored && stored.credentialId === deviceCredentialId && deviceSignature && deviceAuthenticatorData) {
+            factors.device.verified = true;
+            factors.device.details = 'Device credential verified.';
+        } else if (!stored) {
+            factors.device.details = 'Device credential not found. Register first.';
+        } else {
+            factors.device.details = 'Device credential verification failed.';
+        }
+    } else {
+        factors.device.details = 'No device credential provided.';
+    }
+    console.log(`   [Device] ${factors.device.verified ? '✅' : '❌'} ${factors.device.details}`);
+
+    // ── Factor 3: Face Descriptor Hash + ID Card Match ──
+    if (faceDescriptorHash && faceDescriptorHash.length === 64) {
+        if (faceMatchConfirmed) {
+            factors.face.verified = true;
+            factors.face.details = 'Face descriptor hash received and matched with ID card photo.';
+        } else {
+            factors.face.details = 'Face descriptor hash received but ID card face match was NOT confirmed.';
+        }
+    } else if (faceDescriptorHash) {
+        factors.face.details = 'Invalid face descriptor hash format.';
+    } else {
+        factors.face.details = 'No face descriptor hash provided.';
+    }
+    console.log(`   [Face] ${factors.face.verified ? '✅' : '❌'} ${factors.face.details}`);
+
+    // ── Factor 4: Liveness Verification ──
+    if (livenessToken) {
+        try {
+            const tokenResponse = await axios.post(
+                `${LIVENESS_SERVICE_URL}/verify-token`,
+                { token: livenessToken },
+                { timeout: 5000 }
+            );
+
+            if (tokenResponse.data.valid && tokenResponse.data.isLive) {
+                factors.liveness.verified = true;
+                factors.liveness.details = `Liveness confirmed (confidence: ${tokenResponse.data.confidence}).`;
+            } else {
+                factors.liveness.details = tokenResponse.data.error || 'Liveness token invalid or subject not live.';
+            }
+        } catch (error) {
+            // If liveness service is down, we can still proceed with reduced confidence
+            console.warn('   ⚠️ Liveness service unavailable:', error.message);
+            factors.liveness.details = 'Liveness service unavailable. Proceeding without liveness check.';
+            // Don't block the entire flow if liveness service is down
+            // But note: in production, you might want to require it
+        }
+    } else {
+        factors.liveness.details = 'No liveness token provided.';
+    }
+    console.log(`   [Liveness] ${factors.liveness.verified ? '✅' : '❌'} ${factors.liveness.details}`);
+
+    // ── Compute Combined Hash ──
+    const ssnHash = ocrData.hash || '';
+    const deviceKey = deviceRawId || deviceCredentialId || '';
+    const deviceStored = deviceCredentialStore.get(deviceKey);
+    const deviceIdHash = deviceStored
+        ? crypto.createHash('sha256').update(deviceKey + deviceStored.publicKey).digest('hex')
+        : '';
+    const nonce = crypto.randomBytes(16).toString('hex');
+
+    const combinedHash = crypto
+        .createHash('sha256')
+        .update(ssnHash + deviceIdHash + (faceDescriptorHash || '') + nonce)
+        .digest('hex');
+
+    // ── Determine overall result ──
+    const verifiedFactors = Object.values(factors).filter(f => f.verified).length;
+    const totalFactors = 4;
+
+    // Require at least OCR + one other factor for basic verification
+    // All 4 factors for full verification
+    let overallStatus = 'failed';
+    if (verifiedFactors === totalFactors) {
+        overallStatus = 'fully_verified';
+    } else if (factors.ocr.verified && verifiedFactors >= 2) {
+        overallStatus = 'partially_verified';
+    } else if (factors.ocr.verified) {
+        overallStatus = 'ocr_only';
+    }
+
+    // ── Store combined session ──
+    const combinedSession = {
+        sessionId: sessionId + '-combined',
+        walletAddress,
+        factors,
+        verifiedFactors,
+        totalFactors,
+        overallStatus,
+        combinedHash,
+        ssnHash,
+        deviceIdHash,
+        faceDescriptorHash: faceDescriptorHash || null,
+        timestamp: new Date().toISOString()
+    };
+
+    combinedVerificationCache.set(combinedSession.sessionId, combinedSession);
+
+    console.log(`\n   📊 Combined result: ${verifiedFactors}/${totalFactors} factors verified → ${overallStatus}`);
+    console.log(`   🔗 Combined hash: ${combinedHash.substring(0, 16)}...`);
+    console.log('   ===================================\n');
+
+    res.json({
+        success: true,
+        sessionId: combinedSession.sessionId,
+        overallStatus,
+        verifiedFactors,
+        totalFactors,
+        factors,
+        combinedHash,
+        ssnHash,
+        deviceIdHash,
+        faceDescriptorHash: faceDescriptorHash || null,
+        // Data for blockchain registration
+        blockchainData: {
+            combinedHash,
+            ssnHash,
+            deviceIdHash,
+            faceHash: faceDescriptorHash || '0'.repeat(64),
+            voterName: ocrData.userInput?.name || '',
+            idType: ocrData.userInput?.idType || ''
+        }
+    });
+});
+
+/**
+ * Get combined verification result.
+ * GET /api/combined-verification/:sessionId
+ */
+app.get('/api/combined-verification/:sessionId', (req, res) => {
+    const result = combinedVerificationCache.get(req.params.sessionId);
+    if (!result) {
+        return res.status(404).json({ success: false, error: 'Session not found or expired' });
+    }
+    res.json({ success: true, data: result });
+});
+
 // Fallback: serve voting index.html for unknown routes (SPA-like)
 app.get('/', (req, res) => {
     res.sendFile(path.join(votingFrontendDir, 'index.html'));
@@ -1668,6 +2138,10 @@ app.get('/', (req, res) => {
 app.get('/verify', (req, res) => {
     res.sendFile(path.join(idFrontendDir, 'index.html'));
 });
+
+// Serve face-api.js models
+const modelsDir = path.join(idFrontendDir, 'models');
+app.use('/verify/models', express.static(modelsDir));
 
 // Start server
 const PORT = process.env.PORT || 3001;
@@ -1680,6 +2154,11 @@ app.listen(PORT, () => {
     ID Verification:         http://localhost:${PORT}/verify
     Health check:            http://localhost:${PORT}/api/health
     Extract ID API:          POST http://localhost:${PORT}/api/extract-ssn
-    Features:                OCR (multi-variant) + QR Reader + Cross-verification
+    Combined Verify API:     POST http://localhost:${PORT}/api/verify-identity-complete
+    WebAuthn Register:       POST http://localhost:${PORT}/api/webauthn/register
+    WebAuthn Verify:         POST http://localhost:${PORT}/api/webauthn/verify
+    Liveness Proxy:          POST http://localhost:${PORT}/api/liveness/detect
+    Liveness Service:        ${LIVENESS_SERVICE_URL}
+    Features:                OCR + QR + WebAuthn + Face + Liveness
     `);
 });

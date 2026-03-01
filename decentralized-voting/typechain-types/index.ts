@@ -2,7 +2,9 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { Counter } from "./Counter";
+export type { EnhancedIdentity } from "./EnhancedIdentity";
 export type { Voting } from "./Voting";
 export * as factories from "./factories";
 export { Counter__factory } from "./factories/Counter__factory";
+export { EnhancedIdentity__factory } from "./factories/EnhancedIdentity__factory";
 export { Voting__factory } from "./factories/Voting__factory";
