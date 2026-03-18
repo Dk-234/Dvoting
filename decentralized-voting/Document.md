@@ -1,12 +1,13 @@
-# Decentralized Voting System with Multi-Factor Identity Verification
+# Decentralized Voting System with Multi-Factor Identity Verification (v1.3)
 
-A blockchain-based voting platform with integrated **multi-factor identity verification** — combining OCR document scanning, WebAuthn device binding, facial recognition with liveness detection, and on-chain identity registration. Built with Solidity, Hardhat, Express, face-api.js, MediaPipe, and ethers.js.
+A blockchain-based voting platform with integrated **multi-factor identity verification** — combining OCR document scanning, WebAuthn device binding, facial recognition with liveness detection, on-chain identity registration, and (v1.3) backend SQL mirror storage for cross verification. Built with Solidity, Hardhat, Express, face-api.js, MediaPipe, ethers.js, and MySQL.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Version Timeline](#version-timeline)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
@@ -14,6 +15,7 @@ A blockchain-based voting platform with integrated **multi-factor identity verif
 - [Installation](#installation)
 - [Running the System](#running-the-system)
 - [Step-by-Step Usage](#step-by-step-usage)
+- [v1.3 Working (Blockchain + SQL Cross Verification)](#v13-working-blockchain--sql-cross-verification)
 - [API Endpoints](#api-endpoints)
 - [Smart Contracts](#smart-contracts)
 - [Running Tests](#running-tests)
@@ -35,13 +37,30 @@ This system implements a **5-step identity verification pipeline** before allowi
 | **2. Upload ID Document** | OCR extracts text and cross-verifies against user input | Tesseract.js, sharp, jsQR |
 | **3. Face Verification** | Live selfie compared against ID card photo + liveness detection | face-api.js, OpenCV, MediaPipe |
 | **4. Device Registration** | Creates a device-bound cryptographic key pair (blocked until face match passes) | WebAuthn API |
-| **5. Blockchain Registration** | Combines all factor hashes and registers on-chain | Solidity, ethers.js |
+| **5. Blockchain Registration** | Combines all factor hashes, registers on-chain, then syncs SQL mirror (v1.3) | Solidity, ethers.js, Express API |
 
 **Privacy guarantees:**
 - No raw biometric data is ever sent to the server or stored on-chain
 - Only SHA-256 hashes of credentials/descriptors are transmitted
 - Face descriptors are computed in the browser and immediately hashed
 - The liveness microservice receives only video frames for analysis, no identity data
+
+---
+
+## Version Timeline
+
+| Version | Name | Highlights |
+|---------|------|------------|
+| **v1.1** | OCR + Voting Foundation | Voting platform + OCR verification from uploaded identity proof |
+| **v1.2** | Multi-Factor Identity Upgrade | Added face recognition/face matching, liveness detection, and device fingerprint/binding via WebAuthn |
+| **v1.3 (Current)** | Blockchain + SQL Cross-Verification | Added backend SQL mirror for blockchain-registered verified identities, with dedicated store/read APIs |
+
+### v1.3 Updates (Working + Tech)
+
+- Frontend completes the same 5-step verification and blockchain registration flow.
+- After blockchain success, frontend calls backend to persist a SQL mirror record.
+- Backend stores/upserts verified identity metadata in MySQL (`verified_identities`) keyed by wallet address.
+- Backend can fetch SQL records for cross-verification workflows independent of temporary session cache.
 
 ---
 
@@ -69,6 +88,8 @@ This system implements a **5-step identity verification pipeline** before allowi
 │  /api/webauthn/verify   — Verify device credential               │
 │  /api/liveness/detect   — Proxy to liveness microservice         │
 │  /api/verify-identity-complete — Combine all factors             │
+│  /api/store-verified-identity — Persist SQL mirror (v1.3)        │
+│  /api/verified-identity/:walletAddress — Cross-verify lookup     │
 │                                                                  │
 │  Serves: Voting frontend (/) + ID Verification frontend (/verify)│
 └──────────────┬───────────────────────────────────────────────────┘
@@ -92,6 +113,15 @@ This system implements a **5-step identity verification pipeline** before allowi
 │                                                                  │
 │  Voting.sol            — Proposals, voting, voter authorization   │
 │  EnhancedIdentity.sol  — Multi-factor identity hash storage      │
+└──────────────────────────────────────────────────────────────────┘
+
+               │ MySQL (port 3306)
+               ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                   MySQL: verified_identities                     │
+│                                                                  │
+│  Stores wallet-linked verification mirror for backend checks:    │
+│  status, factors, hashes, and chain transaction references       │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -153,7 +183,8 @@ decentralized-voting/
 | Device Binding | WebAuthn API (browser-native) | Cryptographic device registration |
 | Face Detection | face-api.js (via CDN) | Face descriptor extraction in-browser |
 | Liveness Detection | Python, Flask, OpenCV, MediaPipe | Blink/head-pose/texture analysis |
-| Backend | Express.js, Multer, Axios | REST API, file upload, service proxy |
+| Backend | Express.js, Multer, Axios, mysql2 | REST API, verification orchestration, SQL mirror APIs |
+| Database (v1.3) | MySQL | Cross-verification mirror of on-chain verified identities |
 | Wallet | MetaMask | Ethereum transaction signing |
 
 ---
@@ -350,6 +381,7 @@ Liveness microservice (run from `ID_verification/backend/liveness/`):
    - Backend combines hashes into a single `combinedHash`
    - Registers your basic identity on the `Voting` contract
    - Registers your multi-factor identity on the `EnhancedIdentity` contract
+   - **(v1.3) Persists a SQL mirror record using `/api/store-verified-identity`**
    - Both transactions require MetaMask confirmation
 
 8. **Vote**: Go to [http://localhost:3001](http://localhost:3001), connect the same wallet, and wait for a proposal creator to authorize you. Once authorized, cast your vote.
@@ -361,6 +393,22 @@ Liveness microservice (run from `ID_verification/backend/liveness/`):
 3. Start voting on a proposal (set duration in minutes)
 4. View the **Verified Voters** section to see all registered identities
 5. Click **Authorize** next to a voter to allow them to vote on a specific proposal
+
+---
+
+## v1.3 Working (Blockchain + SQL Cross Verification)
+
+In v1.3, identity finalization is a two-target write:
+
+1. Verification factors are combined and validated by backend (`/api/verify-identity-complete`).
+2. Identity is registered on blockchain contracts (`Voting.sol` and `EnhancedIdentity.sol`).
+3. Backend receives final registration context and stores a SQL mirror row (`/api/store-verified-identity`).
+4. Backend can later cross-check a wallet against SQL via `/api/verified-identity/:walletAddress`.
+
+This gives you:
+- Immutable trust anchor on-chain.
+- Fast backend operational cross-verification in SQL.
+- Better auditability with both verification hashes and transaction references.
 
 ---
 
@@ -379,6 +427,8 @@ Liveness microservice (run from `ID_verification/backend/liveness/`):
 | `GET` | `/api/liveness/health` | Proxy: check liveness microservice status |
 | `POST` | `/api/verify-identity-complete` | Combine all verification factors |
 | `GET` | `/api/combined-verification/:sessionId` | Get combined verification result |
+| `POST` | `/api/store-verified-identity` | (v1.3) Store/upsert SQL mirror record for registered identity |
+| `GET` | `/api/verified-identity/:walletAddress` | (v1.3) Fetch SQL mirror record for backend cross verification |
 
 ### Liveness Microservice (port 5001)
 
@@ -477,6 +527,12 @@ npx hardhat compile
 | `MAX_FILE_SIZE` | `10485760` | Max upload size in bytes (10 MB) |
 | `ALLOWED_ORIGINS` | `http://localhost:3001,...` | CORS allowed origins |
 | `LIVENESS_SERVICE_URL` | `http://localhost:5001` | URL of the Python liveness microservice |
+| `DB_HOST` | `localhost` | MySQL host for v1.3 SQL mirror |
+| `DB_PORT` | `3306` | MySQL port |
+| `DB_USER` | `root` | MySQL username |
+| `DB_PASSWORD` | `` | MySQL password |
+| `DB_NAME` | `voting_system` | Database used for vote + identity mirror tables |
+| `DB_CONNECTION_LIMIT` | `10` | MySQL connection pool limit |
 
 ### Liveness Microservice Tuning (`app.py` constants)
 
@@ -527,6 +583,7 @@ npm run deploy:sepolia
 | **MetaMask shows wrong chain** | Switch to Hardhat network (Chain ID 1337, RPC `http://localhost:8545`) |
 | **"Contract config not found"** | Run `npm run deploy` to compile and deploy contracts |
 | **"This ID is already registered"** | Each ID document can only register with one wallet address |
+| **"Failed to persist verified identity in SQL"** | Ensure MySQL is running and `DB_*` variables in `ID_verification/backend/.env` are valid |
 | **Liveness check fails** | Ensure good lighting, face the camera, blink naturally, move head slightly |
 | **Python import errors** | Install dependencies: `pip install -r requirements.txt` |
 | **"nonce too high" error in MetaMask** | Reset MetaMask account: Settings → Advanced → Clear activity tab data |
@@ -542,6 +599,7 @@ npm run deploy:sepolia
 - **Device-bound keys**: WebAuthn private keys never leave the authenticator hardware
 - **Liveness tokens are HMAC-signed**: Prevents replay attacks; tokens expire after 5 minutes
 - **On-chain data is hash-only**: The `EnhancedIdentity` contract stores `bytes32` hashes, not human-readable data
+- **v1.3 SQL mirror remains privacy-safe**: Backend SQL stores verification metadata and hash references (not raw biometrics)
 - **Duplicate prevention**: Each SSN hash and combined hash can only be used once across all wallets
 - **Rate limiting**: API endpoints are rate-limited (10 requests/min per IP) to prevent abuse
 - **All verification factors are open-source**: No proprietary or cloud-dependent APIs

@@ -26,6 +26,7 @@ const proposalsCountEl = document.getElementById('proposalsCount');
 const activeProposalsCountEl = document.getElementById('activeProposalsCount');
 const proposalsListEl = document.getElementById('proposalsList');
 const adminPanel = document.getElementById('adminPanel');
+const API_URL = window.location.origin || 'http://localhost:3001';
 
 // Initialize the application
 async function init() {
@@ -133,7 +134,21 @@ async function setupApplication(userAccount) {
         }
     } catch (error) {
         console.error('Error checking contract:', error);
-        showNotification('Failed to connect to contract', 'error');
+
+        const rpcErrorCode = error?.code || error?.error?.code;
+        const rpcMessage = String(error?.message || error?.error?.message || '').toLowerCase();
+        const isRpcUnavailable =
+            rpcErrorCode === -32002 ||
+            rpcMessage.includes('rpc endpoint returned too many errors') ||
+            rpcMessage.includes('could not coalesce error') ||
+            rpcMessage.includes('failed to fetch') ||
+            rpcMessage.includes('network error');
+
+        if (isRpcUnavailable) {
+            showNotification('Local RPC unavailable. Start "npm run node" and run "npm run deploy", then refresh.', 'error');
+        } else {
+            showNotification('Failed to connect to contract', 'error');
+        }
         return;
     }
     
@@ -631,16 +646,71 @@ function formatTime(seconds) {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Get browser geolocation for vote metadata logging.
+// Returns null when permission is denied or location is unavailable.
+async function getLocation() {
+    if (!navigator.geolocation) {
+        console.warn('Geolocation is not supported by this browser');
+        return null;
+    }
+
+    try {
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        });
+
+        return {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+        };
+    } catch (error) {
+        console.warn('Geolocation error:', error.message);
+        return null;
+    }
+}
+
 // Vote for a proposal option
 async function vote(proposalId, optionId) {
     try {
+        const location = await getLocation();
         showNotification('Processing your vote...', 'info');
         
         const tx = await contract.vote(proposalId, optionId);
         showNotification('Vote submitted! Waiting for confirmation...', 'info');
         
-        await tx.wait();
-        showNotification('🎉 Vote recorded successfully!', 'success');
+        const receipt = await tx.wait();
+
+        // Log vote location metadata off-chain for admin analytics.
+        try {
+            const response = await fetch(`${API_URL}/api/record-location`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    voterAddress: account,
+                    proposalId: Number(proposalId),
+                    txHash: receipt.hash || tx.hash,
+                    lat: location ? location.lat : null,
+                    lng: location ? location.lng : null
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            if (location) {
+                showNotification('🎉 Vote recorded with location!', 'success');
+            } else {
+                showNotification('🎉 Vote recorded (location unavailable)', 'success');
+            }
+        } catch (locationError) {
+            console.error('Location logging error:', locationError);
+            showNotification('Vote recorded on-chain. Location could not be saved.', 'warning');
+        }
         
         // Only refresh results + re-render this proposal card (not the full page)
         await refreshResults();

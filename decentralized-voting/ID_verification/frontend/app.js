@@ -1274,13 +1274,18 @@ if (completeVerificationBtn) {
             }
 
             combinedRegTitle.textContent = 'Verification Combined';
-            combinedRegSubtitle.textContent = 'Status: ' + data.verificationStatus +
-                ' (' + data.factorsVerified + ' factors). Registering on blockchain...';
+            var verificationStatus = data.overallStatus || data.verificationStatus || 'unknown';
+            var factorsVerified = Number(data.verifiedFactors || data.factorsVerified || 0);
+            combinedRegSubtitle.textContent = 'Status: ' + verificationStatus +
+                ' (' + factorsVerified + ' factors). Registering on blockchain...';
 
             // 2. Register on the Voting contract (basic identity registration)
             var idHash = verificationData.hash;
             var voterName = (verificationData.userInput && verificationData.userInput.name) || '';
+            var idTypeRaw = (verificationData.userInput && verificationData.userInput.idType) || '';
             var idTypeLabel = ID_TYPE_LABELS[(verificationData.userInput && verificationData.userInput.idType)] || 'Unknown';
+            var votingTxHash = null;
+            var enhancedTxHash = null;
 
             // Check if already registered on Voting contract
             var alreadyRegistered = false;
@@ -1292,6 +1297,7 @@ if (completeVerificationBtn) {
                 combinedRegSubtitle.textContent = 'Registering on Voting contract... Confirm in MetaMask.';
                 var tx1 = await votingContract.registerVerifiedVoter(idHash, voterName, idTypeLabel);
                 await tx1.wait();
+                votingTxHash = tx1.hash || null;
                 console.log('[Blockchain] Voting contract registration confirmed');
             }
 
@@ -1317,6 +1323,7 @@ if (completeVerificationBtn) {
                             factorsCount
                         );
                         await tx2.wait();
+                        enhancedTxHash = tx2.hash || null;
                         console.log('[Blockchain] Enhanced Identity registration confirmed');
                     }
                 } catch (enhancedErr) {
@@ -1325,16 +1332,57 @@ if (completeVerificationBtn) {
                 }
             }
 
-            // 4. Success!
+            // 4. Persist verified identity in backend SQL for cross-verification
+            var sqlStored = false;
+            combinedRegSubtitle.textContent = 'Blockchain done. Storing SQL cross-verification record...';
+
+            try {
+                var sqlResponse = await fetch(API_URL + '/api/store-verified-identity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        walletAddress: walletAccount,
+                        ocrSessionId: currentSessionId,
+                        combinedSessionId: data.sessionId || null,
+                        verificationStatus: verificationStatus,
+                        factorsVerified: factorsVerified,
+                        voterName: voterName,
+                        idType: idTypeRaw,
+                        idHash: idHash || null,
+                        combinedHash: data.combinedHash,
+                        deviceIdHash: data.deviceIdHash || deviceIdHash || null,
+                        faceHash: faceDescriptorHash || null,
+                        votingTxHash: votingTxHash,
+                        enhancedTxHash: enhancedTxHash
+                    })
+                });
+
+                var sqlData = await sqlResponse.json();
+                if (!sqlResponse.ok || !sqlData.success) {
+                    throw new Error(sqlData.error || 'SQL persistence failed');
+                }
+                sqlStored = true;
+            } catch (sqlErr) {
+                console.warn('[SQL] Verified identity save failed:', sqlErr.message);
+            }
+
+            // 5. Success!
             combinedRegStatus.className = 'verification-banner verified';
             combinedRegIcon.textContent = '✅';
             combinedRegTitle.textContent = 'Identity Fully Registered!';
-            combinedRegSubtitle.textContent = data.factorsVerified +
-                '-factor identity registered on blockchain. You can now be authorized to vote.';
+            combinedRegSubtitle.textContent = factorsVerified +
+                '-factor identity registered on blockchain' +
+                (sqlStored
+                    ? ' and mirrored in SQL for backend cross-verification.'
+                    : '. SQL mirror save failed; blockchain registration is complete.');
             completeVerificationBtn.textContent = '✅ Registered on Blockchain';
 
             await checkOnChainVerification();
-            showNotification('🎉 Multi-factor identity registered on blockchain!', 'success');
+            if (sqlStored) {
+                showNotification('🎉 Multi-factor identity registered on blockchain and saved in SQL!', 'success');
+            } else {
+                showNotification('Blockchain registration complete, but SQL save failed. Retry backend sync if needed.', 'info');
+            }
 
         } catch (error) {
             console.error('[CombinedVerification] Error:', error);

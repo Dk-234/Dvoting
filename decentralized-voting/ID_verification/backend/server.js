@@ -12,11 +12,12 @@ import dotenv from 'dotenv';
 import sharp from 'sharp';
 import jsQR from 'jsqr';
 import axios from 'axios';
-
-dotenv.config();
+import mysql from 'mysql2/promise';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 app.use(cors());
@@ -75,6 +76,146 @@ const combinedVerificationCache = new Map();
 
 // Liveness microservice URL
 const LIVENESS_SERVICE_URL = process.env.LIVENESS_SERVICE_URL || 'http://localhost:5001';
+
+const DB_HOST = process.env.DB_HOST || 'localhost';
+const DB_PORT = Number(process.env.DB_PORT || 3306);
+const DB_USER = process.env.DB_USER || 'root';
+const DB_PASSWORD = process.env.DB_PASSWORD || '';
+const DB_NAME = process.env.DB_NAME || 'voting_system';
+const DB_CONNECTION_LIMIT = Number(process.env.DB_CONNECTION_LIMIT || 10);
+
+// MySQL database pool for vote location auditing.
+const dbPool = mysql.createPool({
+    host: DB_HOST,
+    port: DB_PORT,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+    waitForConnections: true,
+    connectionLimit: DB_CONNECTION_LIMIT,
+    queueLimit: 0
+});
+
+const GEOCODE_MIN_INTERVAL_MS = 1000;
+let lastGeocodeAtMs = 0;
+
+function escapeMySqlIdentifier(identifier) {
+    return String(identifier).replace(/`/g, '``');
+}
+
+async function ensureVoteDatabaseExists() {
+    const connection = await mysql.createConnection({
+        host: DB_HOST,
+        port: DB_PORT,
+        user: DB_USER,
+        password: DB_PASSWORD
+    });
+
+    try {
+        await connection.query(`CREATE DATABASE IF NOT EXISTS \`${escapeMySqlIdentifier(DB_NAME)}\``);
+    } finally {
+        await connection.end();
+    }
+}
+
+async function initVoteLocationTable() {
+    await ensureVoteDatabaseExists();
+
+    await dbPool.query(`
+        CREATE TABLE IF NOT EXISTS vote_locations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            voter_address VARCHAR(42) NOT NULL,
+            proposal_id INT NOT NULL,
+            tx_hash VARCHAR(66) NOT NULL UNIQUE,
+            latitude DECIMAL(10,8),
+            longitude DECIMAL(11,8),
+            location_text TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    console.log('✅ vote_locations table is ready');
+}
+
+async function initVerifiedIdentityTable() {
+    await ensureVoteDatabaseExists();
+
+    await dbPool.query(`
+        CREATE TABLE IF NOT EXISTS verified_identities (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            wallet_address VARCHAR(42) NOT NULL UNIQUE,
+            ocr_session_id VARCHAR(64),
+            combined_session_id VARCHAR(96),
+            verification_status VARCHAR(32) NOT NULL,
+            factors_verified TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            voter_name VARCHAR(255),
+            id_type VARCHAR(64),
+            id_hash CHAR(64),
+            combined_hash CHAR(64),
+            device_id_hash CHAR(64),
+            face_hash CHAR(64),
+            voting_tx_hash VARCHAR(66),
+            enhanced_tx_hash VARCHAR(66),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_verified_identities_combined_hash (combined_hash)
+        )
+    `);
+    console.log('✅ verified_identities table is ready');
+}
+
+async function initDatabaseTables() {
+    await Promise.all([
+        initVoteLocationTable(),
+        initVerifiedIdentityTable()
+    ]);
+}
+
+function isValidSha256Hex(value) {
+    if (!value) return false;
+    return /^[a-f0-9]{64}$/i.test(String(value));
+}
+
+async function reverseGeocodeToCityCountry(lat, lng) {
+    if (lat === null || lat === undefined || lng === null || lng === undefined) {
+        return null;
+    }
+
+    // Keep Nominatim usage polite (max ~1 request/sec).
+    const now = Date.now();
+    const waitMs = GEOCODE_MIN_INTERVAL_MS - (now - lastGeocodeAtMs);
+    if (waitMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+    lastGeocodeAtMs = Date.now();
+
+    try {
+        const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+            params: {
+                format: 'json',
+                lat,
+                lon: lng,
+                addressdetails: 1,
+                zoom: 10
+            },
+            headers: {
+                'User-Agent': 'DecentralizedVoting/1.0 (vote-location-audit)'
+            },
+            timeout: 8000
+        });
+
+        const address = response.data?.address || {};
+        const city = address.city || address.town || address.village || address.county || address.state;
+        const country = address.country;
+
+        if (city && country) return `${city}, ${country}`;
+        if (city) return city;
+        if (country) return country;
+        return response.data?.display_name || null;
+    } catch (error) {
+        console.warn('⚠️ Reverse geocoding failed:', error.message);
+        return null;
+    }
+}
 
 // Rate limiting: simple in-memory tracker
 const rateLimitStore = new Map();
@@ -1535,6 +1676,95 @@ app.get('/api/health', async (req, res) => {
     });
 });
 
+// Record vote + optional geolocation metadata for admin map analytics.
+app.post('/api/record-location', async (req, res) => {
+    const { voterAddress, proposalId, txHash, lat, lng } = req.body || {};
+
+    if (!voterAddress || proposalId === undefined || proposalId === null || !txHash) {
+        return res.status(400).json({
+            success: false,
+            error: 'Missing required fields: voterAddress, proposalId, txHash'
+        });
+    }
+
+    if (!ethers.isAddress(voterAddress)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid voterAddress'
+        });
+    }
+
+    const proposalIdNumber = Number(proposalId);
+    if (!Number.isInteger(proposalIdNumber) || proposalIdNumber < 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid proposalId'
+        });
+    }
+
+    const latitude = lat === null || lat === undefined ? null : Number(lat);
+    const longitude = lng === null || lng === undefined ? null : Number(lng);
+
+    if ((latitude !== null && !Number.isFinite(latitude)) || (longitude !== null && !Number.isFinite(longitude))) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid latitude/longitude values'
+        });
+    }
+
+    let locationText = null;
+    if (latitude !== null && longitude !== null) {
+        locationText = await reverseGeocodeToCityCountry(latitude, longitude);
+    }
+
+    try {
+        await dbPool.execute(
+            `INSERT INTO vote_locations (voter_address, proposal_id, tx_hash, latitude, longitude, location_text)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [voterAddress.toLowerCase(), proposalIdNumber, txHash, latitude, longitude, locationText]
+        );
+
+        res.json({
+            success: true,
+            locationStored: latitude !== null && longitude !== null,
+            locationText
+        });
+    } catch (error) {
+        // Duplicate tx_hash means this vote location was already recorded.
+        if (error && error.code === 'ER_DUP_ENTRY') {
+            return res.json({
+                success: true,
+                duplicate: true,
+                message: 'Location was already recorded for this transaction'
+            });
+        }
+
+        console.error('❌ Error recording vote location:', error);
+        res.status(500).json({ success: false, error: 'Failed to record location' });
+    }
+});
+
+// Return recent vote locations for admin map view.
+app.get('/api/locations', async (req, res) => {
+    const requestedLimit = Number(req.query.limit || 100);
+    const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(Math.floor(requestedLimit), 1), 500)
+        : 100;
+
+    try {
+        const [rows] = await dbPool.query(
+            `SELECT id, voter_address, proposal_id, tx_hash, latitude, longitude, location_text, timestamp
+             FROM vote_locations
+             ORDER BY timestamp DESC
+             LIMIT ${limit}`
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('❌ Error reading vote locations:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch locations' });
+    }
+});
+
 // Extract ID from Image (OCR + QR) with User Input Cross-Verification
 app.post('/api/extract-ssn', upload.single('document'), async (req, res) => {
     console.log('\n📸 Received document for processing');
@@ -2131,6 +2361,157 @@ app.get('/api/combined-verification/:sessionId', (req, res) => {
     res.json({ success: true, data: result });
 });
 
+// Persist blockchain-registered verification in SQL for backend cross-checking.
+app.post('/api/store-verified-identity', rateLimit, async (req, res) => {
+    const {
+        walletAddress,
+        ocrSessionId,
+        combinedSessionId,
+        verificationStatus,
+        factorsVerified,
+        voterName,
+        idType,
+        idHash,
+        combinedHash,
+        deviceIdHash,
+        faceHash,
+        votingTxHash,
+        enhancedTxHash
+    } = req.body || {};
+
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        return res.status(400).json({ success: false, error: 'Invalid or missing walletAddress' });
+    }
+
+    if (!combinedHash || !isValidSha256Hex(combinedHash)) {
+        return res.status(400).json({ success: false, error: 'Invalid or missing combinedHash' });
+    }
+
+    const verifiedCount = Number(factorsVerified || 0);
+    if (!Number.isInteger(verifiedCount) || verifiedCount < 0 || verifiedCount > 4) {
+        return res.status(400).json({ success: false, error: 'Invalid factorsVerified value' });
+    }
+
+    if (idHash && !isValidSha256Hex(idHash)) {
+        return res.status(400).json({ success: false, error: 'Invalid idHash format' });
+    }
+    if (deviceIdHash && !isValidSha256Hex(deviceIdHash)) {
+        return res.status(400).json({ success: false, error: 'Invalid deviceIdHash format' });
+    }
+    if (faceHash && !isValidSha256Hex(faceHash)) {
+        return res.status(400).json({ success: false, error: 'Invalid faceHash format' });
+    }
+
+    const row = [
+        walletAddress.toLowerCase(),
+        ocrSessionId || null,
+        combinedSessionId || null,
+        verificationStatus || 'unknown',
+        verifiedCount,
+        voterName || null,
+        idType || null,
+        idHash ? String(idHash).toLowerCase() : null,
+        String(combinedHash).toLowerCase(),
+        deviceIdHash ? String(deviceIdHash).toLowerCase() : null,
+        faceHash ? String(faceHash).toLowerCase() : null,
+        votingTxHash ? String(votingTxHash).toLowerCase() : null,
+        enhancedTxHash ? String(enhancedTxHash).toLowerCase() : null
+    ];
+
+    try {
+        await dbPool.execute(
+            `INSERT INTO verified_identities (
+                wallet_address,
+                ocr_session_id,
+                combined_session_id,
+                verification_status,
+                factors_verified,
+                voter_name,
+                id_type,
+                id_hash,
+                combined_hash,
+                device_id_hash,
+                face_hash,
+                voting_tx_hash,
+                enhanced_tx_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                ocr_session_id = VALUES(ocr_session_id),
+                combined_session_id = VALUES(combined_session_id),
+                verification_status = VALUES(verification_status),
+                factors_verified = VALUES(factors_verified),
+                voter_name = VALUES(voter_name),
+                id_type = VALUES(id_type),
+                id_hash = VALUES(id_hash),
+                combined_hash = VALUES(combined_hash),
+                device_id_hash = VALUES(device_id_hash),
+                face_hash = VALUES(face_hash),
+                voting_tx_hash = VALUES(voting_tx_hash),
+                enhanced_tx_hash = VALUES(enhanced_tx_hash),
+                updated_at = CURRENT_TIMESTAMP`,
+            row
+        );
+
+        return res.json({
+            success: true,
+            stored: true,
+            walletAddress: walletAddress.toLowerCase()
+        });
+    } catch (error) {
+        console.error('❌ Failed to store verified identity in SQL:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to persist verified identity in SQL'
+        });
+    }
+});
+
+// Backend cross-verification lookup by wallet address.
+app.get('/api/verified-identity/:walletAddress', async (req, res) => {
+    const walletAddress = req.params.walletAddress;
+
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+        return res.status(400).json({ success: false, error: 'Invalid walletAddress' });
+    }
+
+    try {
+        const [rows] = await dbPool.execute(
+            `SELECT
+                wallet_address,
+                ocr_session_id,
+                combined_session_id,
+                verification_status,
+                factors_verified,
+                voter_name,
+                id_type,
+                id_hash,
+                combined_hash,
+                device_id_hash,
+                face_hash,
+                voting_tx_hash,
+                enhanced_tx_hash,
+                created_at,
+                updated_at
+             FROM verified_identities
+             WHERE wallet_address = ?
+             LIMIT 1`,
+            [walletAddress.toLowerCase()]
+        );
+
+        if (!rows.length) {
+            return res.status(404).json({
+                success: false,
+                error: 'No verified identity SQL record found for this wallet'
+            });
+        }
+
+        return res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('❌ Failed to read verified identity SQL record:', error);
+        return res.status(500).json({ success: false, error: 'Failed to read verified identity record' });
+    }
+});
+
 // Fallback: serve voting index.html for unknown routes (SPA-like)
 app.get('/', (req, res) => {
     res.sendFile(path.join(votingFrontendDir, 'index.html'));
@@ -2145,20 +2526,37 @@ app.use('/verify/models', express.static(modelsDir));
 
 // Start server
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-    console.log(`
+
+async function startServer() {
+    try {
+        await initDatabaseTables();
+    } catch (error) {
+        console.error('❌ Failed to initialize MySQL tables:', error.message);
+        console.error('   Ensure MySQL is running and DB_* values in .env are correct.');
+    }
+
+    app.listen(PORT, () => {
+        console.log(`
     🚀 Decentralized Voting + Identity Verification System
     ======================================================
     Server running on port:  ${PORT}
     Voting Portal:           http://localhost:${PORT}
     ID Verification:         http://localhost:${PORT}/verify
+    Admin Vote Map:          http://localhost:${PORT}/admin-map.html
     Health check:            http://localhost:${PORT}/api/health
     Extract ID API:          POST http://localhost:${PORT}/api/extract-ssn
+    Record Location API:     POST http://localhost:${PORT}/api/record-location
+    List Locations API:      GET  http://localhost:${PORT}/api/locations
+    Store Identity API:      POST http://localhost:${PORT}/api/store-verified-identity
+    Read Identity API:       GET  http://localhost:${PORT}/api/verified-identity/:walletAddress
     Combined Verify API:     POST http://localhost:${PORT}/api/verify-identity-complete
     WebAuthn Register:       POST http://localhost:${PORT}/api/webauthn/register
     WebAuthn Verify:         POST http://localhost:${PORT}/api/webauthn/verify
     Liveness Proxy:          POST http://localhost:${PORT}/api/liveness/detect
     Liveness Service:        ${LIVENESS_SERVICE_URL}
-    Features:                OCR + QR + WebAuthn + Face + Liveness
+    Features:                OCR + QR + WebAuthn + Face + Liveness + Vote GPS Logging
     `);
-});
+    });
+}
+
+startServer();

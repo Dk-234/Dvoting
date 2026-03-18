@@ -7,6 +7,22 @@
 
 ---
 
+## Release Timeline
+
+| Version | Milestone | Core Capabilities |
+|---------|-----------|-------------------|
+| **v1.1** | Initial identity-integrated voting release | Decentralized voting platform + OCR-based ID verification from uploaded identity proof |
+| **v1.2** | Multi-factor security upgrade | Added face recognition, liveness checks, and device fingerprint/binding (WebAuthn) |
+| **v1.3 (Current)** | Cross-verification backend release | Added SQL mirror storage of blockchain-registered verified identities for backend-side cross verification |
+
+### What's New In v1.3
+
+- After successful on-chain registration, verified identity metadata is also stored in SQL.
+- Backend now supports cross-verification lookup from SQL without relying only on in-memory/session state.
+- Identity records are upserted by wallet address to keep blockchain and backend mirror synchronized.
+
+---
+
 ## The Problem
 
 Traditional online voting is plagued by identity fraud, vote manipulation, and opaque counting. Centralized systems require voters to *trust* the platform — and that trust is often misplaced.
@@ -54,6 +70,15 @@ All verification factor hashes are combined and registered on **two smart contra
 - **Voting.sol** — basic voter identity for proposal authorization
 - **EnhancedIdentity.sol** — multi-factor proof (up to 4 factors stored as `bytes32` hashes)
 
+### v1.3 Addition : SQL Cross-Verification Mirror
+Once blockchain registration succeeds, the backend stores a mirrored verification record in MySQL for backend-only audit and cross verification:
+- Wallet address
+- Verification status + factors verified
+- Hash references (`idHash`, `combinedHash`, device/face hashes)
+- Blockchain transaction hashes
+
+This keeps the trustless on-chain source of truth intact while enabling faster operational checks in backend workflows.
+
 No human-readable data ever touches the blockchain. Only cryptographic hashes.
 
 ---
@@ -65,15 +90,16 @@ No human-readable data ever touches the blockchain. Only cryptographic hashes.
 ┌─────────────┐            ┌──────────────┐            ┌──────────────┐
 │  MetaMask   │            │  OCR Engine  │   deploy   │  Voting.sol  │
 │  WebAuthn   │───HTTP────▶│  WebAuthn DB │───────────▶│  Enhanced    │
-│  face-api.js│  :3001     │  Liveness ──┐│   :8545    │  Identity.sol│
-│  ethers.js  │            │             ││            └──────────────┘
-└─────────────┘            └─────────────┘│
-                                          │  :5001
-                              ┌───────────▼──────────┐
-                              │  Python Flask         │
-                              │  MediaPipe + OpenCV   │
-                              │  Blink / Pose / Tex.  │
-                              └──────────────────────┘
+│  face-api.js│  :3001     │  SQL Mirror  │            │  Identity.sol│
+│  ethers.js  │            │  APIs        │            └──────────────┘
+└─────────────┘            └──────┬───────┘
+                                  │
+                     :5001        │        :3306
+            ┌─────────▼───────┐   │   ┌────▼──────────────┐
+            │ Python Flask     │   └──▶│ MySQL             │
+            │ MediaPipe+OpenCV │       │ verified_identities│
+            │ Blink/Pose/Tex   │       │ (v1.3 mirror)     │
+            └──────────────────┘       └───────────────────┘
 ```
 
 | Service | Port | Role |
@@ -81,6 +107,7 @@ No human-readable data ever touches the blockchain. Only cryptographic hashes.
 | Hardhat Node | 8545 | Local Ethereum blockchain |
 | Express Server | 3001 | API + both frontends |
 | Liveness Service | 5001 | Blink/head-pose/texture analysis |
+| MySQL | 3306 | v1.3 backend cross-verification mirror for verified identities |
 
 ---
 
@@ -94,7 +121,8 @@ No human-readable data ever touches the blockchain. Only cryptographic hashes.
 | **Face Detection** | face-api.js (in-browser) |
 | **Liveness** | Python, Flask, OpenCV, MediaPipe |
 | **Device Auth** | WebAuthn API |
-| **Backend** | Express.js, Multer, Axios |
+| **Backend** | Express.js, Multer, Axios, mysql2 |
+| **Database (v1.3)** | MySQL (verified identity mirror for backend cross verification) |
 | **Wallet** | MetaMask |
 
 ---
@@ -129,6 +157,7 @@ Then open:
 | Face data | Processed **entirely in-browser**. Only a SHA-256 hash is transmitted |
 | Device keys | WebAuthn private keys **never leave** the hardware authenticator |
 | On-chain data | Only `bytes32` hashes — no names, no photos, no biometrics |
+| SQL mirror (v1.3) | Stores hashed verification metadata + tx references for backend cross verification |
 | Liveness tokens | HMAC-signed, expire in 5 minutes — replay-proof |
 | Duplicate prevention | Each ID document + each combined hash can only register once |
 
